@@ -1,251 +1,233 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
-import API from '../api';
+import api from '../api';
 
 const ROLES = [
-  { key: 'audience', label: '🎧 Audience', desc: 'Discover & attend concerts, buy tickets and merch' },
-  { key: 'singer', label: '🎤 Singer', desc: 'Showcase your talent, get booked for events' },
-  { key: 'organizer', label: '🎪 Organizer', desc: 'Host amazing events and manage concerts' },
+  { value: 'audience',  label: 'Audience',  icon: '👥', desc: 'Buy tickets, attend events, rate experiences' },
+  { value: 'singer',    label: 'Artist',     icon: '🎤', desc: 'Accept bookings, manage merch, build your brand' },
+  { value: 'organizer', label: 'Organizer',  icon: '🎪', desc: 'Host concerts, book artists, manage venues' },
 ];
 
-const Register = () => {
+export default function Register() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
-  const [role, setRole] = useState('');
   const [form, setForm] = useState({
-    username: '', email: '', password: '', confirm: '', profile_picture: ''
+    role: '', name: '', email: '', password: '', confirmPassword: '', otp: ''
   });
-  const [otp, setOtp] = useState('');
-  const [devOtp, setDevOtp] = useState(''); // shown on screen in dev mode
-  const [emailUsed, setEmailUsed] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleRoleSelect = (r) => { setRole(r); setStep(2); };
+  const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const validate = () => {
-    if (!form.username || !form.email || !form.password) return 'All fields are required';
-    if (form.password !== form.confirm) return 'Passwords do not match';
-    if (form.password.length < 8) return 'Password must be at least 8 characters';
-    if (['singer', 'organizer'].includes(role) && !form.profile_picture)
-      return 'Profile picture URL is required for Singer/Organizer';
-    return null;
+  const handleRoleSelect = role => {
+    setForm({ ...form, role });
+    setError('');
   };
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    const err = validate();
-    if (err) return toast.error(err);
+  const handleStep1Next = () => {
+    if (!form.role) { setError('Please select a role.'); return; }
+    setError(''); setStep(2);
+  };
 
-    setLoading(true);
+  const handleStep2Next = async () => {
+    if (!form.name || !form.email || !form.password) { setError('All fields required.'); return; }
+    if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return; }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setLoading(true); setError('');
     try {
-      const res = await API.post('/auth/register', {
-        username: form.username,
-        email: form.email,
-        password: form.password,
-        role,
-        profile_picture: form.profile_picture || null,
-      });
-      setEmailUsed(form.email);
-      // Show OTP on screen if returned (dev mode)
-      if (res.data.dev_otp) setDevOtp(res.data.dev_otp);
+      await api.post('/auth/register', { name: form.name, email: form.email, password: form.password, role: form.role });
       setStep(3);
-      toast.info('OTP sent! Check your email or look at the box below.');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed');
+      setError(err.response?.data?.message || 'Registration failed.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerifyOTP = async (e) => {
-    e.preventDefault();
-    if (otp.length !== 6) return toast.error('Enter the 6-digit OTP');
-    setLoading(true);
+  const handleVerifyOtp = async () => {
+    if (!form.otp) { setError('Enter the OTP sent to your email.'); return; }
+    setLoading(true); setError('');
     try {
-      const res = await API.post('/auth/verify-otp', { email: emailUsed, otp });
-      toast.success(res.data.message);
-      if (res.data.status === 'active') navigate('/login');
-      else navigate('/register/pending');
+      await api.post('/auth/verify-otp', { email: form.email, otp: form.otp });
+      navigate('/login');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'OTP verification failed');
+      setError(err.response?.data?.message || 'Invalid OTP.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResendOTP = async () => {
+  const handleResendOtp = async () => {
     try {
-      const res = await API.post('/auth/resend-otp', { email: emailUsed });
-      if (res.data.dev_otp) setDevOtp(res.data.dev_otp);
-      toast.info('New OTP sent!');
-    } catch {
-      toast.error('Failed to resend OTP');
+      await api.post('/auth/resend-otp', { email: form.email });
+      setError('');
+    } catch (err) {
+      setError('Could not resend OTP.');
     }
   };
 
   return (
     <div className="auth-page">
-      <div className="auth-box" style={{ maxWidth: step === 1 ? 560 : 460 }}>
-        <div className="auth-logo">
-          <h1>🎵 GaanBajna</h1>
-          <p>Create your account</p>
+      <div style={{
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        backgroundImage: `
+          linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px)`,
+        backgroundSize: '60px 60px'
+      }} />
+
+      <div className="auth-card fade-in" style={{ maxWidth: '520px', position: 'relative', zIndex: 1 }}>
+        {/* Header */}
+        <div style={{ marginBottom: '28px' }}>
+          <div style={{
+            fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.2em',
+            color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '8px'
+          }}>
+            ● NEW USER REGISTRATION
+          </div>
+          <div className="auth-title">CREATE ACCOUNT</div>
         </div>
 
-        {/* Step indicators */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 28 }}>
-          {['Choose Role', 'Your Details', 'Verify Email'].map((s, i) => (
-            <React.Fragment key={s}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: '50%', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700,
-                  background: step > i + 1 ? 'var(--green)' : step === i + 1 ? 'var(--gold)' : 'var(--bg3)',
-                  color: step >= i + 1 ? '#000' : 'var(--muted)',
-                }}>
-                  {step > i + 1 ? '✓' : i + 1}
-                </div>
-                <span style={{ fontSize: 12, color: step === i + 1 ? 'var(--text)' : 'var(--muted)' }}>{s}</span>
+        {/* Step Indicator */}
+        <div className="steps" style={{ marginBottom: '28px' }}>
+          {[
+            { n: 1, label: 'Role' },
+            { n: 2, label: 'Details' },
+            { n: 3, label: 'Verify' },
+          ].map((s, i) => (
+            <div key={s.n} className="step" style={{ flex: i < 2 ? '1' : 'unset' }}>
+              <div className={`step-circle ${step === s.n ? 'active' : ''} ${step > s.n ? 'done' : ''}`}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px' }}>
+                {step > s.n ? '✓' : s.n}
               </div>
-              {i < 2 && <div style={{ width: 24, height: 1, background: 'var(--border)' }} />}
-            </React.Fragment>
+              {i < 2 && <div className={`step-line ${step > s.n ? 'done' : ''}`} />}
+            </div>
           ))}
         </div>
 
-        {/* Step 1: Role */}
+        {error && <div className="alert alert-error">{error}</div>}
+
+        {/* ── STEP 1: Role ── */}
         {step === 1 && (
           <div>
-            <p style={{ color: 'var(--muted)', marginBottom: 16, textAlign: 'center' }}>
-              What best describes you?
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{
+              fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.15em',
+              color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '14px'
+            }}>
+              Select your role
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
               {ROLES.map(r => (
-                <button key={r.key} onClick={() => handleRoleSelect(r.key)} style={{
-                  background: 'var(--bg3)', border: '2px solid var(--border)', borderRadius: 12,
-                  padding: '16px 20px', cursor: 'pointer', textAlign: 'left',
-                  transition: 'border-color 0.2s', color: 'var(--text)', fontFamily: 'inherit',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--gold)'}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                >
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{r.label}</div>
-                  <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 3 }}>{r.desc}</div>
-                </button>
+                <div key={r.value}
+                  onClick={() => handleRoleSelect(r.value)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '14px',
+                    padding: '14px 16px', borderRadius: 'var(--radius-sm)',
+                    border: form.role === r.value
+                      ? '1px solid var(--cyan)'
+                      : '1px solid rgba(255,255,255,0.08)',
+                    background: form.role === r.value
+                      ? 'var(--cyan-dim)'
+                      : 'rgba(255,255,255,0.02)',
+                    cursor: 'pointer', transition: 'var(--transition)'
+                  }}>
+                  <div style={{ fontSize: '24px' }}>{r.icon}</div>
+                  <div>
+                    <div style={{
+                      fontFamily: 'var(--text-mono)', fontSize: '12px',
+                      letterSpacing: '0.1em', textTransform: 'uppercase',
+                      color: form.role === r.value ? 'var(--cyan)' : 'var(--text-primary)',
+                      marginBottom: '3px'
+                    }}>
+                      {r.label}
+                    </div>
+                    <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
+                      {r.desc}
+                    </div>
+                  </div>
+                  {form.role === r.value && (
+                    <div style={{ marginLeft: 'auto', color: 'var(--cyan)', fontSize: '16px' }}>●</div>
+                  )}
+                </div>
               ))}
             </div>
-            <p style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 20, fontSize: 14 }}>
-              Already have an account? <Link to="/login">Log in</Link>
-            </p>
+            <button className="btn btn-solid-cyan btn-lg btn-block" onClick={handleStep1Next}>
+              CONTINUE →
+            </button>
           </div>
         )}
 
-        {/* Step 2: Details */}
+        {/* ── STEP 2: Details ── */}
         {step === 2 && (
-          <form onSubmit={handleRegister}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-              <button type="button" onClick={() => setStep(1)} style={{
-                background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 20
-              }}>←</button>
-              <span style={{ color: 'var(--muted)', fontSize: 14 }}>
-                Registering as <strong style={{ color: 'var(--gold)', textTransform: 'capitalize' }}>{role}</strong>
-              </span>
-            </div>
-
+          <div>
             <div className="form-group">
-              <label>Username</label>
-              <input className="form-control" placeholder="your_username" value={form.username}
-                onChange={e => setForm({ ...form, username: e.target.value })} required />
+              <label className="form-label">Full Name</label>
+              <input className="form-control" name="name" placeholder="Your full name"
+                value={form.name} onChange={handleChange} />
             </div>
             <div className="form-group">
-              <label>Email</label>
-              <input className="form-control" type="email" placeholder="you@email.com" value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })} required />
+              <label className="form-label">Email Address</label>
+              <input className="form-control" type="email" name="email" placeholder="user@example.com"
+                value={form.email} onChange={handleChange} />
             </div>
             <div className="form-group">
-              <label>Password</label>
-              <input className="form-control" type="password" placeholder="Minimum 8 characters"
-                value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
+              <label className="form-label">Password</label>
+              <input className="form-control" type="password" name="password" placeholder="Min 6 characters"
+                value={form.password} onChange={handleChange} />
             </div>
             <div className="form-group">
-              <label>Confirm Password</label>
-              <input className="form-control" type="password" placeholder="Repeat your password"
-                value={form.confirm} onChange={e => setForm({ ...form, confirm: e.target.value })} required />
+              <label className="form-label">Confirm Password</label>
+              <input className="form-control" type="password" name="confirmPassword" placeholder="Repeat password"
+                value={form.confirmPassword} onChange={handleChange} />
             </div>
-
-            {['singer', 'organizer'].includes(role) && (
-              <div className="form-group">
-                <label>Profile Picture URL <span style={{ color: 'var(--red)' }}>*</span></label>
-                <input className="form-control" placeholder="https://example.com/photo.jpg"
-                  value={form.profile_picture}
-                  onChange={e => setForm({ ...form, profile_picture: e.target.value })} />
-                <small style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4, display: 'block' }}>
-                  Required. Paste a direct image URL (e.g. from imgur, cloudinary)
-                </small>
-              </div>
-            )}
-
-            <button type="submit" className="btn btn-primary"
-              style={{ width: '100%', justifyContent: 'center', marginTop: 4 }} disabled={loading}>
-              {loading ? 'Creating Account...' : 'Create Account →'}
-            </button>
-          </form>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <button className="btn btn-ghost btn-lg" style={{ flex: 1 }} onClick={() => setStep(1)}>
+                ← BACK
+              </button>
+              <button className="btn btn-solid-cyan btn-lg" style={{ flex: 2 }} onClick={handleStep2Next} disabled={loading}>
+                {loading ? 'REGISTERING...' : 'REGISTER →'}
+              </button>
+            </div>
+          </div>
         )}
 
-        {/* Step 3: OTP Verification */}
+        {/* ── STEP 3: OTP ── */}
         {step === 3 && (
-          <form onSubmit={handleVerifyOTP}>
-            <div style={{ textAlign: 'center', marginBottom: 24 }}>
-              <div style={{ fontSize: '3rem', marginBottom: 12 }}>📧</div>
-              <p style={{ color: 'var(--muted)' }}>We sent a 6-digit OTP to</p>
-              <p style={{ fontWeight: 700, color: 'var(--gold)', fontSize: '1.05rem' }}>{emailUsed}</p>
-              <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>
-                Valid for <strong>5 minutes</strong>
-              </p>
+          <div>
+            <div style={{
+              padding: '14px', background: 'var(--cyan-dim)',
+              border: '1px solid rgba(0,212,255,0.2)', borderRadius: 'var(--radius-sm)',
+              fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--cyan)',
+              marginBottom: '20px', letterSpacing: '0.05em'
+            }}>
+              ● OTP sent to {form.email}
             </div>
-
-            {/* Dev OTP hint box */}
-            {devOtp && (
-              <div style={{
-                background: 'rgba(46,204,113,0.08)', border: '1.5px solid rgba(46,204,113,0.4)',
-                borderRadius: 10, padding: '12px 16px', marginBottom: 18, textAlign: 'center'
-              }}>
-                <p style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>
-                  🛠️ Dev Mode — Your OTP is:
-                </p>
-                <p style={{ fontSize: '1.8rem', fontWeight: 900, letterSpacing: 12, color: '#2ecc71' }}>
-                  {devOtp}
-                </p>
-                <p style={{ color: 'var(--muted)', fontSize: 11, marginTop: 4 }}>
-                  (Also printed in your backend terminal)
-                </p>
-              </div>
-            )}
-
             <div className="form-group">
-              <label>Enter OTP</label>
-              <input className="form-control" placeholder="123456" maxLength={6}
-                value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                style={{ textAlign: 'center', fontSize: '1.8rem', letterSpacing: 14, fontWeight: 700 }}
-                autoFocus />
+              <label className="form-label">Verification OTP</label>
+              <input className="form-control" name="otp" placeholder="Enter 6-digit code"
+                value={form.otp} onChange={handleChange}
+                style={{ textAlign: 'center', fontSize: '20px', letterSpacing: '0.4em' }} />
             </div>
-
-            <button type="submit" className="btn btn-primary"
-              style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
-              {loading ? 'Verifying...' : '✓ Verify & Continue'}
+            <button className="btn btn-solid-cyan btn-lg btn-block" onClick={handleVerifyOtp} disabled={loading}>
+              {loading ? 'VERIFYING...' : '⚡ VERIFY & ACTIVATE'}
             </button>
-
-            <button type="button" onClick={handleResendOTP}
-              style={{
-                background: 'none', border: 'none', color: 'var(--muted)', fontSize: 13,
-                cursor: 'pointer', marginTop: 14, display: 'block', textAlign: 'center', width: '100%'
+            <div style={{ textAlign: 'center', marginTop: '14px' }}>
+              <button onClick={handleResendOtp} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)',
+                letterSpacing: '0.05em'
               }}>
-              Didn't receive the OTP? <span style={{ color: 'var(--gold)' }}>Resend</span>
-            </button>
-          </form>
+                Resend OTP →
+              </button>
+            </div>
+          </div>
         )}
+
+        <div className="auth-divider"><span>HAVE ACCOUNT</span></div>
+        <div style={{ textAlign: 'center', fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--text-dim)' }}>
+          <Link to="/login" style={{ color: 'var(--cyan)' }}>← Back to Login</Link>
+        </div>
       </div>
     </div>
   );
-};
-
-export default Register;
+}
