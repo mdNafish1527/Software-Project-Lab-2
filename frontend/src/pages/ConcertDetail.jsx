@@ -1,207 +1,272 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
-import API from '../api';
-import { useAuth } from '../context/AuthContext';
+import { useState, useEffect, useContext } from 'react';
+import { useParams } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
+import api from '../api';
 
-const ConcertDetail = () => {
+export default function ConcertDetail() {
   const { id } = useParams();
-  const { user } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   const [event, setEvent] = useState(null);
+  const [tiers, setTiers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('INFO');
+  const [selectedTier, setSelectedTier] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+  const [complaint, setComplaint] = useState({ subject: '', description: '' });
+  const [alert, setAlert] = useState(null);
   const [buying, setBuying] = useState(false);
-  const [tier, setTier] = useState(1);
-  const [qty, setQty] = useState(1);
-  const [showComplaint, setShowComplaint] = useState(false);
-  const [complaint, setComplaint] = useState({ description: '', evidence: '' });
 
   useEffect(() => {
-    API.get(`/events/${id}`)
-      .then(r => { setEvent(r.data); setLoading(false); })
-      .catch(() => setLoading(false));
+    api.get(`/events/${id}`)
+      .then(res => {
+        setEvent(res.data?.event || res.data);
+        const tierData = res.data?.tiers || res.data?.ticket_tiers || [];
+        setTiers(tierData);
+        if (tierData.length > 0) setSelectedTier(tierData[0]);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [id]);
 
-  const handleBuy = async () => {
-    if (!user) return navigate('/login');
-    if (user.role !== 'audience') return toast.error('Only audience members can buy tickets');
+  const showAlert = (type, text) => {
+    setAlert({ type, text });
+    setTimeout(() => setAlert(null), 4000);
+  };
+
+  const handleBuyTicket = async () => {
+    if (!user) { showAlert('error', 'Please login to buy tickets'); return; }
+    if (!selectedTier) { showAlert('error', 'Select a ticket tier'); return; }
     setBuying(true);
     try {
-      const res = await API.post('/tickets/buy', { event_id: id, tier, quantity: qty });
-      toast.success(`🎟️ ${res.data.tickets.length} ticket(s) purchased! Check your email.`);
+      await api.post('/tickets/buy', {
+        event_id: id,
+        tier_id: selectedTier.id,
+        quantity
+      });
+      showAlert('success', 'Tickets purchased! Check your email for QR codes.');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Purchase failed');
+      showAlert('error', err.response?.data?.message || 'Purchase failed.');
     } finally {
       setBuying(false);
     }
   };
 
-  const handleComplaint = async (e) => {
-    e.preventDefault();
+  const handleComplaint = async () => {
+    if (!complaint.subject || !complaint.description) {
+      showAlert('error', 'Fill in all complaint fields');
+      return;
+    }
     try {
-      await API.post('/complaints', { event_id: id, ...complaint });
-      toast.success('Complaint submitted');
-      setShowComplaint(false);
-      setComplaint({ description: '', evidence: '' });
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to submit complaint');
+      await api.post('/complaints', { ...complaint, event_id: id });
+      setComplaint({ subject: '', description: '' });
+      showAlert('success', 'Complaint submitted successfully');
+    } catch {
+      showAlert('error', 'Failed to submit complaint');
     }
   };
 
-  if (loading) return <div className="page"><div className="spinner" /></div>;
-  if (!event) return <div className="page"><div className="container"><h2>Event not found</h2></div></div>;
+  if (loading) return (
+    <div className="flex-center" style={{ minHeight: '60vh' }}>
+      <div className="spinner" />
+    </div>
+  );
 
-  const tierOptions = [
-    { tier: 1, price: event.tier1_price, qty: event.tier1_quantity },
-    { tier: 2, price: event.tier2_price, qty: event.tier2_quantity },
-    { tier: 3, price: event.tier3_price, qty: event.tier3_quantity },
-  ].filter(t => t.price);
-
-  const selectedTier = tierOptions.find(t => t.tier === tier);
-  const totalCost = selectedTier ? selectedTier.price * qty : 0;
+  if (!event) return (
+    <div className="main-content">
+      <div className="empty-state">
+        <div className="empty-icon">🎵</div>
+        <div className="empty-title">EVENT NOT FOUND</div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="page">
-      {/* Banner */}
+    <div className="page-wrapper">
+      {/* Hero Banner */}
       <div style={{
-        height: 320,
-        background: event.poster
-          ? `url(${event.poster}) center/cover`
-          : 'linear-gradient(135deg, #1a0e00, #2a1500)',
+        background: 'linear-gradient(135deg, #040810 0%, #0a1624 50%, #040810 100%)',
+        borderBottom: '1px solid rgba(0,212,255,0.15)',
+        padding: '40px 24px',
         position: 'relative',
+        overflow: 'hidden'
       }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(8,8,8,0.9), transparent)' }} />
-        <div className="container" style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'flex-end', paddingBottom: 24 }}>
-          <div>
-            <span className="badge badge-green" style={{ marginBottom: 8 }}>🟢 Live Now</span>
-            <h1 style={{ fontSize: '2.2rem' }}>{event.title}</h1>
-            <p style={{ color: 'var(--muted)' }}>🎤 {event.singer_name} &nbsp;·&nbsp; Organized by {event.organizer_name}</p>
+        <div style={{
+          position: 'absolute', top: 0, right: 0, width: '300px', height: '300px',
+          background: 'radial-gradient(circle, rgba(0,212,255,0.08) 0%, transparent 70%)',
+          pointerEvents: 'none'
+        }} />
+        <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+          <div style={{
+            fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.2em',
+            color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '10px'
+          }}>
+            🎵 Live Concert
+          </div>
+          <h1 style={{
+            fontFamily: 'var(--text-display)', fontSize: '32px', color: 'var(--cyan)',
+            letterSpacing: '0.06em', textShadow: 'var(--cyan-glow)', marginBottom: '16px'
+          }}>
+            {event.title}
+          </h1>
+          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+            {[
+              { icon: '📍', text: event.venue || event.location || 'Venue TBD' },
+              { icon: '📅', text: event.event_date ? new Date(event.event_date).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Date TBD' },
+              { icon: '🎤', text: event.singer_name || 'Artist TBD' },
+            ].map(item => (
+              <div key={item.icon} style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--text-secondary)'
+              }}>
+                <span>{item.icon}</span>
+                <span>{item.text}</span>
+              </div>
+            ))}
+            <span className="badge badge-green">LIVE</span>
           </div>
         </div>
       </div>
 
-      <div className="container" style={{ paddingTop: 32 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 32 }}>
-          {/* Left: Details */}
-          <div>
-            <div className="card" style={{ marginBottom: 24 }}>
-              <div className="card-body">
-                <h3 style={{ marginBottom: 16 }}>Event Details</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                  {[
-                    ['📅 Date', new Date(event.date).toLocaleDateString('en-BD', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })],
-                    ['⏰ Time', event.time],
-                    ['📍 Venue', event.venue],
-                    ['🏙️ City', event.city],
-                  ].map(([label, val]) => (
-                    <div key={label}>
-                      <p style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>{label}</p>
-                      <p style={{ fontWeight: 600 }}>{val}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+      <div className="main-content">
+        {alert && <div className={`alert alert-${alert.type}`} style={{ marginBottom: '20px' }}>{alert.text}</div>}
 
-            {event.description && (
-              <div className="card" style={{ marginBottom: 24 }}>
-                <div className="card-body">
-                  <h3 style={{ marginBottom: 12 }}>About This Concert</h3>
-                  <p style={{ color: 'var(--muted)', lineHeight: 1.8 }}>{event.description}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Artist Card */}
-            <div className="card" style={{ marginBottom: 24 }}>
-              <div className="card-body" style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                <img src={event.singer_pic || 'https://via.placeholder.com/60'} alt={event.singer_name}
-                  style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--gold)' }} />
-                <div>
-                  <p style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>Performing Artist</p>
-                  <h3 style={{ fontSize: '1.1rem' }}>{event.singer_name}</h3>
-                </div>
-              </div>
-            </div>
-
-            {/* Complaint */}
-            {user && (
-              <button onClick={() => setShowComplaint(!showComplaint)} className="btn btn-outline btn-sm">
-                ⚠️ Submit a Complaint
-              </button>
-            )}
-
-            {showComplaint && (
-              <div className="card" style={{ marginTop: 16 }}>
-                <div className="card-body">
-                  <h4 style={{ marginBottom: 16 }}>Submit Complaint</h4>
-                  <form onSubmit={handleComplaint}>
-                    <div className="form-group">
-                      <label>Description</label>
-                      <textarea className="form-control" rows={4} value={complaint.description}
-                        onChange={e => setComplaint({ ...complaint, description: e.target.value })}
-                        placeholder="Describe the issue..." />
-                    </div>
-                    <div className="form-group">
-                      <label>Evidence (Photo/Video URL)</label>
-                      <input className="form-control" placeholder="https://..." value={complaint.evidence}
-                        onChange={e => setComplaint({ ...complaint, evidence: e.target.value })} />
-                    </div>
-                    <button type="submit" className="btn btn-danger">Submit Complaint</button>
-                  </form>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right: Ticket purchase */}
-          <div>
-            <div className="card" style={{ position: 'sticky', top: 80 }}>
-              <div className="card-body">
-                <h3 style={{ marginBottom: 20 }}>Get Tickets</h3>
-
-                <div className="form-group">
-                  <label>Select Tier</label>
-                  {tierOptions.map(t => (
-                    <div key={t.tier} onClick={() => setTier(t.tier)} style={{
-                      padding: '12px 16px', borderRadius: 10, border: `2px solid ${tier === t.tier ? 'var(--gold)' : 'var(--border)'}`,
-                      marginBottom: 8, cursor: 'pointer', transition: 'var(--transition)',
-                      background: tier === t.tier ? 'rgba(245,166,35,0.08)' : 'transparent',
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 600 }}>Tier {t.tier}</span>
-                        <span style={{ color: 'var(--gold)', fontWeight: 700 }}>৳{t.price}</span>
-                      </div>
-                      <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>{t.qty} available</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="form-group">
-                  <label>Quantity (max 10)</label>
-                  <input type="number" className="form-control" min={1} max={10}
-                    value={qty} onChange={e => setQty(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))} />
-                </div>
-
-                <hr className="divider" />
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <span style={{ color: 'var(--muted)' }}>Total</span>
-                  <span style={{ fontWeight: 700, color: 'var(--gold)', fontSize: '1.2rem' }}>৳{totalCost}</span>
-                </div>
-
-                <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
-                  onClick={handleBuy} disabled={buying || !user}>
-                  {buying ? 'Processing...' : user ? '🎟️ Buy Tickets' : 'Log in to Buy'}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '20px' }}>
+          {/* Left: Info Tabs */}
+          <div className="panel">
+            <div className="panel-tabs">
+              {['INFO', ...(user ? ['COMPLAINT'] : [])].map(tab => (
+                <button key={tab} className={`panel-tab ${activeTab === tab ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab)}>
+                  {tab}
                 </button>
-
-                {!user && <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 12, marginTop: 10 }}>You must be logged in to purchase</p>}
-              </div>
+              ))}
+            </div>
+            <div className="panel-body">
+              {activeTab === 'INFO' ? (
+                <div>
+                  {event.description && (
+                    <div style={{
+                      fontFamily: 'var(--text-body)', fontSize: '15px', color: 'var(--text-secondary)',
+                      lineHeight: 1.8, marginBottom: '20px'
+                    }}>
+                      {event.description}
+                    </div>
+                  )}
+                  {tiers.length > 0 && (
+                    <div>
+                      <div style={{
+                        fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.15em',
+                        textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px'
+                      }}>
+                        Available Ticket Tiers
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        {tiers.map(tier => (
+                          <div key={tier.id} style={{
+                            background: 'var(--bg-secondary)', border: 'var(--border-dim)',
+                            borderRadius: 'var(--radius-sm)', padding: '14px 18px', minWidth: '140px'
+                          }}>
+                            <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '4px' }}>
+                              {tier.name}
+                            </div>
+                            <div style={{ fontFamily: 'var(--text-display)', fontSize: '20px', color: 'var(--gold)', textShadow: 'var(--gold-glow)' }}>
+                              ৳{tier.price?.toLocaleString()}
+                            </div>
+                            <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                              {tier.remaining || tier.capacity || '—'} available
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ maxWidth: '480px' }}>
+                  <div style={{
+                    fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)',
+                    marginBottom: '16px', letterSpacing: '0.05em'
+                  }}>
+                    Submit a complaint about this event
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Subject</label>
+                    <input className="form-control" placeholder="Brief subject"
+                      value={complaint.subject} onChange={e => setComplaint(p => ({ ...p, subject: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Description</label>
+                    <textarea className="form-control" rows={5} placeholder="Describe the issue in detail..."
+                      value={complaint.description} onChange={e => setComplaint(p => ({ ...p, description: e.target.value }))}
+                      style={{ resize: 'vertical' }} />
+                  </div>
+                  <button className="btn btn-danger" onClick={handleComplaint}>
+                    SUBMIT COMPLAINT
+                  </button>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Right: Ticket Purchase */}
+          {user?.role === 'audience' && (
+            <div style={{
+              background: 'var(--bg-card)', border: '1px solid rgba(0,212,255,0.2)',
+              borderTop: '2px solid var(--cyan)', borderRadius: 'var(--radius-lg)',
+              padding: '24px', height: 'fit-content'
+            }}>
+              <div style={{
+                fontFamily: 'var(--text-mono)', fontSize: '11px', letterSpacing: '0.15em',
+                textTransform: 'uppercase', color: 'var(--cyan)', marginBottom: '20px'
+              }}>
+                Buy Tickets
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Select Tier</label>
+                <select className="form-control" value={selectedTier?.id || ''}
+                  onChange={e => setSelectedTier(tiers.find(t => t.id == e.target.value))}>
+                  {tiers.map(t => (
+                    <option key={t.id} value={t.id}>{t.name} — ৳{t.price?.toLocaleString()}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Quantity (max 10)</label>
+                <input className="form-control" type="number" min={1} max={10}
+                  value={quantity} onChange={e => setQuantity(Math.min(10, Math.max(1, Number(e.target.value))))} />
+              </div>
+
+              {selectedTier && (
+                <div style={{
+                  padding: '12px', background: 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius-sm)', marginBottom: '16px'
+                }}>
+                  <div className="flex-between">
+                    <span style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      {quantity} × ৳{selectedTier.price?.toLocaleString()}
+                    </span>
+                    <span style={{ fontFamily: 'var(--text-display)', fontSize: '18px', color: 'var(--gold)', textShadow: 'var(--gold-glow)' }}>
+                      ৳{(selectedTier.price * quantity)?.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <button className="btn btn-solid-cyan btn-block btn-lg" onClick={handleBuyTicket} disabled={buying || !tiers.length}>
+                {buying ? 'PROCESSING...' : '⚡ BUY TICKETS'}
+              </button>
+              <div style={{
+                fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)',
+                textAlign: 'center', marginTop: '10px', letterSpacing: '0.05em'
+              }}>
+                QR codes sent to your email
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
-};
-
-export default ConcertDetail;
+}
