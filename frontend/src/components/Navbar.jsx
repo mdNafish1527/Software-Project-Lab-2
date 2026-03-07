@@ -14,8 +14,12 @@ const nameAnimStyles = `
   }
 
   @keyframes typewriter {
-    from { width: 0; }
-    to   { width: 100%; }
+    0%   { width: 0; opacity: 1; }
+    50%  { width: 100%; opacity: 1; }
+    75%  { width: 100%; opacity: 1; }
+    85%  { width: 100%; opacity: 0; }
+    90%  { width: 0; opacity: 0; }
+    100% { width: 0; opacity: 1; }
   }
 
   @keyframes blinkCursor {
@@ -46,9 +50,9 @@ const nameAnimStyles = `
     text-shadow: 0 0 8px #ff6b6b, 0 0 20px rgba(255,107,107,0.4);
     border-right: 2px solid #ff6b6b;
     animation:
-      typewriter 1.4s steps(18) 0.3s forwards,
-      blinkCursor 0.7s step-end 0.3s 3,
-      namePulse 3s ease-in-out 2s infinite;
+      typewriter 3.5s steps(18) 0s infinite,
+      blinkCursor 0.5s step-end infinite,
+      namePulse 3.5s ease-in-out infinite;
   }
 
   .team-name-nafish {
@@ -64,9 +68,9 @@ const nameAnimStyles = `
     text-shadow: 0 0 8px #4fc3f7, 0 0 20px rgba(79,195,247,0.4);
     border-right: 2px solid #4fc3f7;
     animation:
-      typewriter 1.2s steps(14) 1.8s forwards,
-      blinkCursor 0.7s step-end 1.8s 3,
-      namePulse 3s ease-in-out 3.5s infinite;
+      typewriter 3.5s steps(14) 0.5s infinite,
+      blinkCursor 0.5s step-end 0.5s infinite,
+      namePulse 3.5s ease-in-out 0.5s infinite;
   }
 
   .team-chip-animated {
