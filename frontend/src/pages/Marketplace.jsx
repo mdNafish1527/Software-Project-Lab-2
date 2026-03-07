@@ -1,32 +1,22 @@
 import { useState, useEffect, useContext } from 'react';
 import api from '../api';
-import { AuthContext } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Marketplace() {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
-  const [recommended, setRecommended] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState([]);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('browse');
   const [cartOpen, setCartOpen] = useState(false);
   const [alert, setAlert] = useState(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [itemsRes, recRes] = await Promise.all([
-          api.get('/marketplace'),
-          user ? api.get('/marketplace/recommended').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
-        ]);
-        setItems(itemsRes.data || []);
-        setRecommended(recRes.data || []);
-      } catch {}
-      setLoading(false);
-    };
-    fetchData();
-  }, [user]);
+    api.get('/marketplace')
+      .then(res => setItems(res.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = search
     ? items.filter(i => i.name?.toLowerCase().includes(search.toLowerCase()))
@@ -90,9 +80,7 @@ export default function Marketplace() {
             ) : (
               <>
                 {cart.map(item => (
-                  <div key={item.id} className="flex-between" style={{
-                    padding: '10px 0', borderBottom: 'var(--border-dim)'
-                  }}>
+                  <div key={item.id} className="flex-between" style={{ padding: '10px 0', borderBottom: 'var(--border-dim)' }}>
                     <span style={{ fontFamily: 'var(--text-body)', fontSize: '14px', color: 'var(--text-primary)' }}>
                       {item.name} × {item.qty}
                     </span>
@@ -102,13 +90,8 @@ export default function Marketplace() {
                   </div>
                 ))}
                 <div className="flex-between" style={{ marginTop: '12px' }}>
-                  <span style={{ fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    TOTAL
-                  </span>
-                  <span style={{
-                    fontFamily: 'var(--text-display)', fontSize: '18px',
-                    color: 'var(--gold)', textShadow: 'var(--gold-glow)'
-                  }}>
+                  <span style={{ fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>TOTAL</span>
+                  <span style={{ fontFamily: 'var(--text-display)', fontSize: '18px', color: 'var(--gold)', textShadow: 'var(--gold-glow)' }}>
                     ৳{cartTotal.toLocaleString()}
                   </span>
                 </div>
@@ -120,65 +103,51 @@ export default function Marketplace() {
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="panel-tabs" style={{
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: 'var(--radius-sm)', overflow: 'hidden',
-          background: 'var(--bg-card)', display: 'inline-flex', marginBottom: '20px'
-        }}>
-          {['browse', ...(recommended.length > 0 ? ['recommended'] : [])].map(tab => (
-            <button key={tab} className={`panel-tab ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab)}
-              style={{ padding: '10px 18px', fontSize: '10px' }}>
-              {tab.toUpperCase()}
-            </button>
-          ))}
-        </div>
+        {/* Search */}
+        <input
+          className="form-control"
+          placeholder="Search merchandise..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ maxWidth: '360px', marginBottom: '20px', display: 'block' }}
+        />
 
-        {activeTab === 'browse' && (
-          <input
-            className="form-control"
-            placeholder="Search merchandise..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ maxWidth: '360px', marginBottom: '20px', display: 'block' }}
-          />
-        )}
-
+        {/* Items Grid */}
         {loading ? (
           <div className="flex-center" style={{ padding: '80px' }}>
             <div className="spinner" />
           </div>
         ) : (
           <div className="product-grid">
-            {(activeTab === 'recommended' ? recommended : filtered).map(item => (
-              <div key={item.id} className="product-card">
-                <div className="product-image">🎵</div>
-                <div className="product-body">
-                  <div className="product-name">{item.name}</div>
-                  {item.description && (
-                    <div style={{
-                      fontFamily: 'var(--text-body)', fontSize: '12px', color: 'var(--text-secondary)',
-                      marginBottom: '10px', lineHeight: 1.5
-                    }}>
-                      {item.description}
-                    </div>
-                  )}
-                  <div className="flex-between" style={{ marginTop: '10px' }}>
-                    <div className="product-price">৳{item.price?.toLocaleString()}</div>
-                    <button className="btn btn-primary btn-sm" onClick={() => addToCart(item)}>
-                      + ADD
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {(activeTab === 'recommended' ? recommended : filtered).length === 0 && (
+            {filtered.length === 0 ? (
               <div className="empty-state" style={{ gridColumn: '1/-1' }}>
                 <div className="empty-icon">🛒</div>
                 <div className="empty-title">NO ITEMS FOUND</div>
                 <div className="empty-sub">Check back later for merchandise</div>
               </div>
+            ) : (
+              filtered.map(item => (
+                <div key={item.id} className="product-card">
+                  <div className="product-image">🎵</div>
+                  <div className="product-body">
+                    <div className="product-name">{item.name}</div>
+                    {item.description && (
+                      <div style={{
+                        fontFamily: 'var(--text-body)', fontSize: '12px',
+                        color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: 1.5
+                      }}>
+                        {item.description}
+                      </div>
+                    )}
+                    <div className="flex-between" style={{ marginTop: '10px' }}>
+                      <div className="product-price">৳{item.price?.toLocaleString()}</div>
+                      <button className="btn btn-primary btn-sm" onClick={() => addToCart(item)}>
+                        + ADD
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}
