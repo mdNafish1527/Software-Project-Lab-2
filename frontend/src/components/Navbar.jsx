@@ -101,7 +101,7 @@ export default function Navbar() {
             <img
               src={zarinPhoto}
               alt="Kazi Zarin Tasnim"
-              style={{ width: "52px", height: "52px", borderRadius: "50%", objectFit: "cover", border: "3px solid #c0392b", flexShrink: 0 }}
+              style={{ width: "160px", height: "160px", borderRadius: "50%", objectFit: "cover", border: "4px solid #c0392b", flexShrink: 0 }}
             />
             Kazi Zarin Tasnim
           </div>
@@ -109,7 +109,7 @@ export default function Navbar() {
             <img
               src={nafishPhoto}
               alt="Nafish Salehin"
-              style={{ width: "52px", height: "52px", borderRadius: "50%", objectFit: "cover", border: "3px solid #1a6ca8", flexShrink: 0 }}
+              style={{ width: "160px", height: "160px", borderRadius: "50%", objectFit: "cover", border: "4px solid #1a6ca8", flexShrink: 0 }}
             />
             Nafish Salehin
           </div>
