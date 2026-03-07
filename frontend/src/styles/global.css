@@ -79,7 +79,7 @@ a:hover { color: var(--text-primary); text-shadow: var(--cyan-glow); }
 
 /* ─── Layout ─────────────────────────────────── */
 .page-wrapper { min-height: 100vh; display: flex; flex-direction: column; }
-.main-content { flex: 1; padding: 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+.main-content { flex: 1; padding: 24px; width: 100%; }
 
 /* ─── Navbar ─────────────────────────────────── */
 .navbar {
@@ -194,7 +194,7 @@ a:hover { color: var(--text-primary); text-shadow: var(--cyan-glow); }
 .team-banner {
   background: linear-gradient(135deg, #080f1e 0%, #0b1628 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  padding: 16px 24px;
+  padding: 20px 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -786,8 +786,7 @@ tbody td {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
   gap: 40px;
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
   margin-bottom: 40px;
 }
 
@@ -826,8 +825,7 @@ tbody td {
 .footer-links a:hover { color: var(--cyan); text-shadow: none; }
 
 .footer-bottom {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
   padding-top: 24px;
   border-top: var(--border-dim);
   display: flex;
