@@ -1,10 +1,10 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import api from '../api';
 
 export default function OrganizerDashboard() {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
