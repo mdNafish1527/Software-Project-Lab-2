@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/events  — Browse all concerts (NO LOGIN REQUIRED)
+// PUBLIC: GET /api/events
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
@@ -117,7 +117,7 @@ router.get('/genres', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/events/:id  — Concert detail
+// PUBLIC: GET /api/events/:id
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
@@ -151,9 +151,9 @@ router.get('/:id', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events/booking  — Organizer books a singer
+// PROTECTED: POST /api/events/booking
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/booking', verifyToken, requireRole('organizer'), async (req, res) => {
+router.post('/booking', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const { singer_id, event_date, venue, message, proposed_fee } = req.body;
     if (!singer_id || !event_date || !venue) {
@@ -174,9 +174,9 @@ router.post('/booking', verifyToken, requireRole('organizer'), async (req, res) 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/events/bookings/mine  — Singer sees their booking requests
+// PROTECTED: GET /api/events/bookings/mine
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/bookings/mine', verifyToken, requireRole('singer'), async (req, res) => {
+router.get('/bookings/mine', authenticate, requireRole('singer'), async (req, res) => {
   try {
     const [bookings] = await db.query(
       `SELECT b.*, u.name AS organizer_name, u.email AS organizer_email
@@ -193,11 +193,11 @@ router.get('/bookings/mine', verifyToken, requireRole('singer'), async (req, res
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: PUT /api/events/booking/:id/respond  — Singer accepts/rejects
+// PROTECTED: PUT /api/events/booking/:id/respond
 // ─────────────────────────────────────────────────────────────────────────────
-router.put('/booking/:id/respond', verifyToken, requireRole('singer'), async (req, res) => {
+router.put('/booking/:id/respond', authenticate, requireRole('singer'), async (req, res) => {
   try {
-    const { status } = req.body; // 'accepted' or 'rejected'
+    const { status } = req.body;
     if (!['accepted', 'rejected'].includes(status)) {
       return res.status(400).json({ message: 'Status must be accepted or rejected' });
     }
@@ -220,9 +220,9 @@ router.put('/booking/:id/respond', verifyToken, requireRole('singer'), async (re
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events/booking/:id/pay  — Organizer pays singer fee
+// PROTECTED: POST /api/events/booking/:id/pay
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/booking/:id/pay', verifyToken, requireRole('organizer'), async (req, res) => {
+router.post('/booking/:id/pay', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const [rows] = await db.query(
       'SELECT * FROM bookings WHERE id = ? AND organizer_id = ?',
@@ -245,9 +245,9 @@ router.post('/booking/:id/pay', verifyToken, requireRole('organizer'), async (re
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events  — Organizer creates a concert
+// PROTECTED: POST /api/events  — Create concert
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/', verifyToken, requireRole('organizer'), async (req, res) => {
+router.post('/', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const {
       title, description, venue, event_date, event_time, duration_minutes,
@@ -286,9 +286,9 @@ router.post('/', verifyToken, requireRole('organizer'), async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events/:id/launch  — Organizer launches concert live
+// PROTECTED: POST /api/events/:id/launch
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/:id/launch', verifyToken, requireRole('organizer'), async (req, res) => {
+router.post('/:id/launch', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const [rows] = await db.query(
       'SELECT * FROM events WHERE id = ? AND organizer_id = ?',
@@ -308,14 +308,13 @@ router.post('/:id/launch', verifyToken, requireRole('organizer'), async (req, re
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events/:id/custom-url  — Request custom URL
+// PROTECTED: POST /api/events/:id/custom-url
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/:id/custom-url', verifyToken, requireRole('organizer'), async (req, res) => {
+router.post('/:id/custom-url', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const { custom_url } = req.body;
     if (!custom_url) return res.status(400).json({ message: 'custom_url is required' });
 
-    // Check if URL is already taken
     const [existing] = await db.query(
       'SELECT id FROM events WHERE custom_url = ? AND id != ?',
       [custom_url, req.params.id]
@@ -340,9 +339,9 @@ router.post('/:id/custom-url', verifyToken, requireRole('organizer'), async (req
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events/:id/approve-url  — Admin approves custom URL
+// PROTECTED: POST /api/events/:id/approve-url
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/:id/approve-url', verifyToken, requireRole('admin'), async (req, res) => {
+router.post('/:id/approve-url', authenticate, requireRole('admin'), async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM events WHERE id = ?', [req.params.id]);
     if (!rows.length) return res.status(404).json({ message: 'Event not found' });
@@ -359,9 +358,9 @@ router.post('/:id/approve-url', verifyToken, requireRole('admin'), async (req, r
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/events/organizer/mine  — Organizer sees their events
+// PROTECTED: GET /api/events/organizer/mine
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/organizer/mine', verifyToken, requireRole('organizer'), async (req, res) => {
+router.get('/organizer/mine', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const [events] = await db.query(
       `SELECT e.*, s.name AS singer_name
