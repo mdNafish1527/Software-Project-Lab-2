@@ -6,73 +6,43 @@ import api from '../api';
 const DEFAULT_CONCERTS = [
   {
     id: 'default-1',
-    title: 'বসন্ত উৎসব ২০২৪',
-    subtitle: 'Basanta Utsab — Spring Festival',
+    title: 'IIT-DU Tech Fest 2025 — Mega Night',
+    subtitle: 'Annual Tech Fest Concert — Grand Finale',
     venue: 'টিএসসি চত্বর, ঢাকা বিশ্ববিদ্যালয়',
-    venue_en: 'TSC, University of Dhaka',
-    event_date: '2024-02-14',
-    singer_name: 'ছায়ানট শিল্পীগোষ্ঠী',
-    genre: 'Rabindra Sangeet',
+    venue_en: 'TSC Ground, University of Dhaka',
+    event_date: '2025-12-20',
+    singer_name: 'Aurthohin',
+    genre: 'Rock / Metal',
     price: '৳200',
-    tag: 'CULTURAL',
-    tag_color: 'badge-gold',
-    emoji: '🌸',
-    highlight: false,
-  },
-  {
-    id: 'default-2',
-    title: 'IIT-DU Tech Fest Concert',
-    subtitle: 'Annual Cultural Night — Flagship Event',
-    venue: 'IIT ভবন, ঢাকা বিশ্ববিদ্যালয়',
-    venue_en: 'IIT Building, University of Dhaka',
-    event_date: '2024-03-15',
-    singer_name: 'Shironamhin & Artcell',
-    genre: 'Rock / Alternative',
-    price: '৳150',
     tag: 'IIT-DU',
     tag_color: 'badge-cyan',
     emoji: '⚡',
     highlight: true,
   },
   {
+    id: 'default-2',
+    title: 'University of Dhaka 104th Founding Day',
+    subtitle: '১০৪তম প্রতিষ্ঠাবার্ষিকী সাংস্কৃতিক সন্ধ্যা',
+    venue: 'বটমূল, ঢাকা বিশ্ববিদ্যালয়',
+    venue_en: 'Botomul Ground, University of Dhaka',
+    event_date: '2025-07-01',
+    singer_name: 'Shironamhin',
+    genre: 'Classical / Cultural',
+    price: '৳150',
+    tag: 'DU',
+    tag_color: 'badge-gold',
+    emoji: '🏛️',
+    highlight: false,
+  },
+  {
     id: 'default-3',
-    title: 'একুশে ফেব্রুয়ারি স্মরণ সন্ধ্যা',
-    subtitle: 'International Mother Language Day Concert',
-    venue: 'কেন্দ্রীয় শহীদ মিনার, ঢাকা',
-    venue_en: 'Central Shaheed Minar, Dhaka',
-    event_date: '2024-02-21',
-    singer_name: 'Fakir Alamgir & Friends',
-    genre: 'Folk / Patriotic',
-    price: 'Free',
-    tag: 'SPECIAL',
-    tag_color: 'badge-red',
-    emoji: '🕊️',
-    highlight: false,
-  },
-  {
-    id: 'default-4',
-    title: 'DU Cultural Week — Closing Night',
-    subtitle: 'Grand Finale of ঢাবি সাংস্কৃতিক সপ্তাহ',
-    venue: 'কলাভবন মাঠ, ঢাকা বিশ্ববিদ্যালয়',
-    venue_en: 'Kala Bhaban Field, University of Dhaka',
-    event_date: '2024-04-10',
-    singer_name: 'Tahsan Khan',
-    genre: 'Pop / Fusion',
-    price: '৳300',
-    tag: 'UNIVERSITY',
-    tag_color: 'badge-purple',
-    emoji: '🎶',
-    highlight: false,
-  },
-  {
-    id: 'default-5',
-    title: 'পহেলা বৈশাখ মেলা কনসার্ট',
-    subtitle: 'Pohela Boishakh — Bengali New Year 1431',
-    venue: 'রমনা বটমূল, ঢাকা',
-    venue_en: 'Ramna Batamul, Dhaka',
-    event_date: '2024-04-14',
-    singer_name: 'Momtaz Begum & Bari Siddiqui',
-    genre: 'Baul / Folk',
+    title: 'পহেলা বৈশাখ ১৪৩২ — TSC Grand Festival',
+    subtitle: 'Pohela Boishakh — Bengali New Year 1432',
+    venue: 'টিএসসি চত্বর, ঢাকা বিশ্ববিদ্যালয়',
+    venue_en: 'TSC Cafeteria Ground, University of Dhaka',
+    event_date: '2025-04-14',
+    singer_name: 'Hawa Band',
+    genre: 'Folk / Baul / Cultural',
     price: 'Free',
     tag: 'CULTURAL',
     tag_color: 'badge-gold',
@@ -80,18 +50,48 @@ const DEFAULT_CONCERTS = [
     highlight: false,
   },
   {
+    id: 'default-4',
+    title: 'Victory Day Rock Concert — বিজয় উৎসব',
+    subtitle: '৫৪তম মহান বিজয় দিবস কনসার্ট',
+    venue: 'কেন্দ্রীয় শহীদ মিনার, ঢাকা বিশ্ববিদ্যালয়',
+    venue_en: 'Central Shaheed Minar, DU',
+    event_date: '2025-12-16',
+    singer_name: 'Cryptic Fate & Shironamhin',
+    genre: 'Rock / Patriotic',
+    price: '৳150',
+    tag: 'SPECIAL',
+    tag_color: 'badge-red',
+    emoji: '🇧🇩',
+    highlight: false,
+  },
+  {
+    id: 'default-5',
+    title: 'Ekushey February — Language Martyrs Night',
+    subtitle: 'আন্তর্জাতিক মাতৃভাষা দিবস রাত্রি কনসার্ট',
+    venue: 'কেন্দ্রীয় শহীদ মিনার, ঢাবি',
+    venue_en: 'Central Shaheed Minar, DU',
+    event_date: '2026-02-21',
+    singer_name: 'Shironamhin',
+    genre: 'Cultural / Memorial',
+    price: 'Free',
+    tag: 'EKUSHEY',
+    tag_color: 'badge-red',
+    emoji: '🕊️',
+    highlight: false,
+  },
+  {
     id: 'default-6',
-    title: 'IIT-DU Freshers Night 2025',
-    subtitle: 'Welcome Ceremony for New Batch',
-    venue: 'IIT অডিটোরিয়াম, ঢাকা বিশ্ববিদ্যালয়',
-    venue_en: 'IIT Auditorium, University of Dhaka',
-    event_date: '2025-01-20',
-    singer_name: 'Hasan S. Iqbal',
-    genre: 'Pop / Acoustic',
-    price: '৳100',
-    tag: 'IIT-DU',
-    tag_color: 'badge-cyan',
-    emoji: '🎓',
+    title: 'Aurthohin 25th Anniversary at DU',
+    subtitle: 'রজতজয়ন্তী — 25 Years of Bangladeshi Rock',
+    venue: 'টিএসসি মাঠ, ঢাকা বিশ্ববিদ্যালয়',
+    venue_en: 'TSC Ground, University of Dhaka',
+    event_date: '2025-12-31',
+    singer_name: 'Aurthohin',
+    genre: 'Rock / Classic',
+    price: '৳250',
+    tag: 'LEGEND',
+    tag_color: 'badge-purple',
+    emoji: '🎸',
     highlight: true,
   },
 ];
@@ -108,8 +108,12 @@ export default function Home() {
   const [liveEvents, setLiveEvents] = useState([]);
 
   useEffect(() => {
-    api.get('/events')
-      .then(res => setLiveEvents((res.data || []).slice(0, 3)))
+    api.get('/events?limit=3&status=upcoming')
+      .then(res => {
+        // Our new route returns { events: [...], pagination: {...} }
+        const data = res.data?.events || res.data || [];
+        setLiveEvents(Array.isArray(data) ? data.slice(0, 3) : []);
+      })
       .catch(() => {});
   }, []);
 
@@ -142,7 +146,6 @@ export default function Home() {
           position: 'relative',
           overflow: 'hidden'
         }}>
-          {/* BG decorations */}
           <div style={{ position:'absolute', top:'-60px', right:'-60px', width:'300px', height:'300px', borderRadius:'50%', background:'radial-gradient(circle, rgba(0,212,255,0.08) 0%, transparent 70%)', pointerEvents:'none' }} />
           <div style={{ position:'absolute', bottom:'-80px', left:'20%', width:'400px', height:'400px', borderRadius:'50%', background:'radial-gradient(circle, rgba(176,64,255,0.05) 0%, transparent 70%)', pointerEvents:'none' }} />
 
@@ -189,7 +192,8 @@ export default function Home() {
               </p>
               <div style={{ display:'flex', gap:'12px', flexWrap:'wrap' }}>
                 <Link to="/concerts" className="btn btn-solid-cyan btn-lg">⚡ BROWSE CONCERTS</Link>
-                {!user && <Link to="/register" className="btn btn-gold btn-lg">JOIN NOW</Link>}
+                <Link to="/marketplace" className="btn btn-gold btn-lg">🛒 MARKETPLACE</Link>
+                {!user && <Link to="/register" className="btn btn-ghost btn-lg">JOIN NOW</Link>}
               </div>
             </div>
 
@@ -222,14 +226,14 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ── Default Concerts ── */}
+        {/* ── Default / Featured Concerts ── */}
         <div style={{ marginBottom: '10px' }} className="flex-between">
           <div>
             <div style={{
               fontFamily:'var(--text-mono)', fontSize:'10px', letterSpacing:'0.2em',
               textTransform:'uppercase', color:'var(--text-dim)', marginBottom:'4px'
             }}>
-              ঢাকা বিশ্ববিদ্যালয় · University of Dhaka
+              ঢাকা বিশ্ববিদ্যালয় · IIT-DU · University of Dhaka
             </div>
             <h2 style={{
               fontFamily:'var(--text-display)', fontSize:'18px',
@@ -248,91 +252,94 @@ export default function Home() {
           marginBottom:'40px'
         }}>
           {DEFAULT_CONCERTS.map((ev, i) => (
-            <div key={ev.id} style={{
-              background: ev.highlight
-                ? 'linear-gradient(135deg, #071628 0%, #0b1e36 100%)'
-                : 'var(--bg-card)',
-              border: ev.highlight
-                ? '1px solid rgba(0,212,255,0.35)'
-                : 'var(--border-dim)',
-              borderTop: ev.highlight ? '3px solid var(--cyan)' : '3px solid rgba(255,179,0,0.3)',
-              borderRadius:'var(--radius-lg)',
-              overflow:'hidden',
-              transition:'transform 0.2s, box-shadow 0.2s',
-              animation:`fadeInUp 0.4s ease ${i * 0.07}s both`,
-              cursor:'pointer'
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.boxShadow = ev.highlight
-                ? '0 12px 40px rgba(0,212,255,0.15)'
-                : '0 12px 40px rgba(0,0,0,0.4)';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.transform = 'none';
-              e.currentTarget.style.boxShadow = 'none';
-            }}>
-              {/* Card Header */}
+            <Link key={ev.id} to="/concerts" style={{ textDecoration: 'none' }}>
               <div style={{
-                height:'120px',
                 background: ev.highlight
-                  ? 'linear-gradient(135deg, #071a2e 0%, #0e2540 100%)'
-                  : 'linear-gradient(135deg, #080f1e 0%, #0f1e35 100%)',
-                display:'flex', alignItems:'center', justifyContent:'center',
-                fontSize:'52px', position:'relative'
+                  ? 'linear-gradient(135deg, #071628 0%, #0b1e36 100%)'
+                  : 'var(--bg-card)',
+                border: ev.highlight
+                  ? '1px solid rgba(0,212,255,0.35)'
+                  : 'var(--border-dim)',
+                borderTop: ev.highlight ? '3px solid var(--cyan)' : '3px solid rgba(255,179,0,0.3)',
+                borderRadius:'var(--radius-lg)',
+                overflow:'hidden',
+                transition:'transform 0.2s, box-shadow 0.2s',
+                animation:`fadeInUp 0.4s ease ${i * 0.07}s both`,
+                cursor:'pointer',
+                height: '100%',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = ev.highlight
+                  ? '0 12px 40px rgba(0,212,255,0.15)'
+                  : '0 12px 40px rgba(0,0,0,0.4)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = 'none';
               }}>
-                {ev.emoji}
-                <div style={{ position:'absolute', top:'10px', right:'10px', display:'flex', gap:'6px' }}>
-                  <span className={`badge ${ev.tag_color}`}>{ev.tag}</span>
-                  {ev.highlight && (
-                    <span className="badge badge-cyan" style={{ animation:'pulse 2s infinite' }}>★ FEATURED</span>
-                  )}
+                {/* Card Header */}
+                <div style={{
+                  height:'120px',
+                  background: ev.highlight
+                    ? 'linear-gradient(135deg, #071a2e 0%, #0e2540 100%)'
+                    : 'linear-gradient(135deg, #080f1e 0%, #0f1e35 100%)',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:'52px', position:'relative'
+                }}>
+                  {ev.emoji}
+                  <div style={{ position:'absolute', top:'10px', right:'10px', display:'flex', gap:'6px' }}>
+                    <span className={`badge ${ev.tag_color}`}>{ev.tag}</span>
+                    {ev.highlight && (
+                      <span className="badge badge-cyan" style={{ animation:'pulse 2s infinite' }}>★ FEATURED</span>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Card Body */}
-              <div style={{ padding:'16px' }}>
-                <div style={{
-                  fontFamily:'var(--text-display)', fontSize:'14px',
-                  color: ev.highlight ? 'var(--cyan)' : 'var(--text-primary)',
-                  letterSpacing:'0.04em', marginBottom:'4px',
-                  textShadow: ev.highlight ? 'var(--cyan-glow)' : 'none'
-                }}>
-                  {ev.title}
-                </div>
-                <div style={{
-                  fontFamily:'var(--text-mono)', fontSize:'10px',
-                  color:'var(--text-dim)', marginBottom:'10px', letterSpacing:'0.05em'
-                }}>
-                  {ev.subtitle}
-                </div>
-                <div style={{
-                  display:'flex', flexDirection:'column', gap:'4px',
-                  fontFamily:'var(--text-mono)', fontSize:'11px',
-                  color:'var(--text-secondary)', marginBottom:'12px'
-                }}>
-                  <span>📍 {ev.venue}</span>
-                  <span style={{ fontSize:'10px', color:'var(--text-dim)', paddingLeft:'18px' }}>{ev.venue_en}</span>
-                  <span>📅 {new Date(ev.event_date).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}</span>
-                  <span>🎤 {ev.singer_name}</span>
-                  <span>🎵 {ev.genre}</span>
-                </div>
-                <div className="flex-between">
-                  <span className="badge badge-gold">{ev.price}</span>
-                  <span style={{
-                    fontFamily:'var(--text-mono)', fontSize:'11px',
-                    color: ev.highlight ? 'var(--cyan)' : 'var(--text-secondary)',
-                    letterSpacing:'0.05em'
+                {/* Card Body */}
+                <div style={{ padding:'16px' }}>
+                  <div style={{
+                    fontFamily:'var(--text-display)', fontSize:'14px',
+                    color: ev.highlight ? 'var(--cyan)' : 'var(--text-primary)',
+                    letterSpacing:'0.04em', marginBottom:'4px',
+                    textShadow: ev.highlight ? 'var(--cyan-glow)' : 'none'
                   }}>
-                    DETAILS →
-                  </span>
+                    {ev.title}
+                  </div>
+                  <div style={{
+                    fontFamily:'var(--text-mono)', fontSize:'10px',
+                    color:'var(--text-dim)', marginBottom:'10px', letterSpacing:'0.05em'
+                  }}>
+                    {ev.subtitle}
+                  </div>
+                  <div style={{
+                    display:'flex', flexDirection:'column', gap:'4px',
+                    fontFamily:'var(--text-mono)', fontSize:'11px',
+                    color:'var(--text-secondary)', marginBottom:'12px'
+                  }}>
+                    <span>📍 {ev.venue}</span>
+                    <span style={{ fontSize:'10px', color:'var(--text-dim)', paddingLeft:'18px' }}>{ev.venue_en}</span>
+                    <span>📅 {new Date(ev.event_date).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}</span>
+                    <span>🎤 {ev.singer_name}</span>
+                    <span>🎵 {ev.genre}</span>
+                  </div>
+                  <div className="flex-between">
+                    <span className="badge badge-gold">{ev.price}</span>
+                    <span style={{
+                      fontFamily:'var(--text-mono)', fontSize:'11px',
+                      color: ev.highlight ? 'var(--cyan)' : 'var(--text-secondary)',
+                      letterSpacing:'0.05em'
+                    }}>
+                      DETAILS →
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
 
-        {/* ── Live API Events (if any) ── */}
+        {/* ── Live API Events (from database) ── */}
         {liveEvents.length > 0 && (
           <>
             <div style={{ marginBottom:'10px' }} className="flex-between">
@@ -341,7 +348,7 @@ export default function Home() {
                   fontFamily:'var(--text-mono)', fontSize:'10px', letterSpacing:'0.2em',
                   textTransform:'uppercase', color:'var(--text-dim)', marginBottom:'4px'
                 }}>
-                  Live Listings
+                  Live Database Listings
                 </div>
                 <h2 style={{
                   fontFamily:'var(--text-display)', fontSize:'18px',
@@ -357,26 +364,34 @@ export default function Home() {
               gap:'16px', marginBottom:'40px'
             }}>
               {liveEvents.map(ev => (
-                <Link key={ev.id} to={`/concerts/${ev.id}`} style={{ textDecoration:'none' }}>
+                <Link key={ev.id} to={`/concerts/${ev.custom_url || ev.id}`} style={{ textDecoration:'none' }}>
                   <div className="event-card">
                     <div style={{
-                      height:'140px', background:'linear-gradient(135deg, #080f1e 0%, #0f1e35 100%)',
-                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:'48px',
-                      position:'relative'
+                      height:'140px', overflow:'hidden', position:'relative',
+                      background:'linear-gradient(135deg, #080f1e 0%, #0f1e35 100%)',
                     }}>
-                      🎵
+                      {ev.banner_image ? (
+                        <img src={ev.banner_image} alt={ev.title}
+                          style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                      ) : (
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', fontSize:'48px' }}>🎵</div>
+                      )}
+                      <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(8,15,30,0.85) 0%, transparent 60%)' }} />
                       <div style={{ position:'absolute', top:'10px', right:'10px' }}>
-                        <span className="badge badge-green">LIVE</span>
+                        <span className="badge badge-green">UPCOMING</span>
                       </div>
                     </div>
                     <div className="event-card-body">
                       <div className="event-card-title">{ev.title}</div>
                       <div className="event-card-meta">
-                        <span>📍 {ev.venue || ev.location || '—'}</span>
-                        <span>📅 {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : '—'}</span>
+                        <span>📍 {ev.venue || '—'}</span>
+                        <span>📅 {ev.event_date ? new Date(ev.event_date).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '—'}</span>
+                        {ev.singer_name && <span>🎤 {ev.singer_name}</span>}
                       </div>
                       <div className="flex-between">
-                        <span className="badge badge-cyan">৳{ev.min_price || '—'}</span>
+                        <span className="badge badge-gold">
+                          {ev.ticket_price_student === 0 ? 'FREE' : ev.ticket_price_student ? `৳${ev.ticket_price_student}` : ev.ticket_price_general ? `৳${ev.ticket_price_general}` : 'See Details'}
+                        </span>
                         <span style={{ fontFamily:'var(--text-mono)', fontSize:'11px', color:'var(--cyan)' }}>VIEW →</span>
                       </div>
                     </div>
