@@ -1,14 +1,7 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  FILE LOCATION: backend/routes/marketplace.js
-//
-//  ADD or REPLACE the GET routes at the top with these PUBLIC versions.
-//  The POST/PUT/DELETE (order, add item) routes KEEP requiring auth.
-// ═══════════════════════════════════════════════════════════════════════════
-
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-// const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole } = require('../middleware/auth');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC: GET /api/marketplace  — Browse all items (NO LOGIN REQUIRED)
@@ -63,15 +56,19 @@ router.get('/', async (req, res) => {
       [...params, parseInt(limit), parseInt(offset)]
     );
 
-    // Fetch distinct categories for filter panel
     const [cats] = await db.query(
-      "SELECT DISTINCT category FROM marketplace_items WHERE is_available = 1 ORDER BY category"
+      'SELECT DISTINCT category FROM marketplace_items WHERE is_available = 1 ORDER BY category'
     );
 
     res.json({
       items,
       categories: cats.map(c => c.category),
-      pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / limit) },
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit),
+      },
     });
   } catch (err) {
     console.error('GET /marketplace error:', err);
@@ -80,7 +77,7 @@ router.get('/', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/marketplace/featured  — Featured items for homepage
+// PUBLIC: GET /api/marketplace/featured
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/featured', async (req, res) => {
   try {
@@ -98,12 +95,10 @@ router.get('/featured', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/marketplace/recommended  — Recommended (PUBLIC fallback)
+// PUBLIC: GET /api/marketplace/recommended
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/recommended', async (req, res) => {
   try {
-    // If user is logged in, use browsing history (optional — check header)
-    // Otherwise return featured/recent mix
     const [items] = await db.query(
       `SELECT id, title, price, original_price, category, image_url,
               condition_status, seller_name, seller_dept
@@ -119,7 +114,7 @@ router.get('/recommended', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/marketplace/:id  — Item detail (NO LOGIN REQUIRED)
+// PUBLIC: GET /api/marketplace/:id  — Item detail
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
@@ -134,8 +129,10 @@ router.get('/:id', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ message: 'Item not found' });
 
-    // Increment view count
-    await db.query('UPDATE marketplace_items SET views = COALESCE(views, 0) + 1 WHERE id = ?', [req.params.id]);
+    await db.query(
+      'UPDATE marketplace_items SET views = COALESCE(views, 0) + 1 WHERE id = ?',
+      [req.params.id]
+    );
 
     res.json(rows[0]);
   } catch (err) {
@@ -143,8 +140,225 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ─── YOUR EXISTING AUTH-PROTECTED ROUTES CONTINUE BELOW ───────────────────
-// POST / (add item), PUT /:id, DELETE /:id, POST /order, GET /orders/mine
-// Keep those routes with verifyToken middleware as they were.
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: POST /api/marketplace  — Add new item (singer or organizer)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/', verifyToken, requireRole('singer', 'organizer'), async (req, res) => {
+  try {
+    const {
+      title, description, price, original_price, category,
+      image_url, condition_status, seller_contact, seller_hall,
+      stock, tags,
+    } = req.body;
+
+    if (!title || !price || !category) {
+      return res.status(400).json({ message: 'title, price and category are required' });
+    }
+
+    const [userRows] = await db.query(
+      'SELECT name, role FROM users WHERE id = ?', [req.user.id]
+    );
+    const seller = userRows[0];
+
+    const [result] = await db.query(
+      `INSERT INTO marketplace_items (
+        title, description, price, original_price, category,
+        image_url, condition_status, seller_id, seller_name,
+        seller_contact, seller_hall, stock, tags,
+        is_available, is_featured, views, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, NOW())`,
+      [
+        title, description || '', price, original_price || null, category,
+        image_url || '', condition_status || 'Good',
+        req.user.id, seller.name,
+        seller_contact || '', seller_hall || '',
+        stock || 1, tags || '',
+      ]
+    );
+
+    res.status(201).json({ message: 'Item listed successfully', item_id: result.insertId });
+  } catch (err) {
+    console.error('POST /marketplace error:', err);
+    res.status(500).json({ message: 'Failed to list item' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: PUT /api/marketplace/:id  — Update item
+// ─────────────────────────────────────────────────────────────────────────────
+router.put('/:id', verifyToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM marketplace_items WHERE id = ? AND seller_id = ?',
+      [req.params.id, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Item not found or not yours' });
+
+    const {
+      title, description, price, original_price, category,
+      image_url, condition_status, stock, tags, is_available,
+    } = req.body;
+
+    await db.query(
+      `UPDATE marketplace_items SET
+        title = COALESCE(?, title),
+        description = COALESCE(?, description),
+        price = COALESCE(?, price),
+        original_price = COALESCE(?, original_price),
+        category = COALESCE(?, category),
+        image_url = COALESCE(?, image_url),
+        condition_status = COALESCE(?, condition_status),
+        stock = COALESCE(?, stock),
+        tags = COALESCE(?, tags),
+        is_available = COALESCE(?, is_available)
+       WHERE id = ?`,
+      [
+        title, description, price, original_price, category,
+        image_url, condition_status, stock, tags, is_available,
+        req.params.id,
+      ]
+    );
+
+    res.json({ message: 'Item updated successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update item' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: DELETE /api/marketplace/:id  — Remove item
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM marketplace_items WHERE id = ? AND seller_id = ?',
+      [req.params.id, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Item not found or not yours' });
+
+    await db.query(
+      'UPDATE marketplace_items SET is_available = 0 WHERE id = ?',
+      [req.params.id]
+    );
+
+    res.json({ message: 'Item removed from marketplace' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to remove item' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: POST /api/marketplace/order  — Place an order
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/order', verifyToken, async (req, res) => {
+  try {
+    const { item_id, quantity, shipping_address, phone } = req.body;
+
+    if (!item_id || !shipping_address || !phone) {
+      return res.status(400).json({ message: 'item_id, shipping_address and phone are required' });
+    }
+
+    const [itemRows] = await db.query(
+      'SELECT * FROM marketplace_items WHERE id = ? AND is_available = 1',
+      [item_id]
+    );
+    if (!itemRows.length) return res.status(404).json({ message: 'Item not found or unavailable' });
+
+    const item = itemRows[0];
+    const qty = quantity || 1;
+
+    if (item.stock < qty) {
+      return res.status(400).json({ message: `Only ${item.stock} in stock` });
+    }
+
+    const total_price = item.price * qty;
+
+    const [result] = await db.query(
+      `INSERT INTO orders (
+        buyer_id, item_id, seller_id, quantity, total_price,
+        shipping_address, phone, status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`,
+      [req.user.id, item_id, item.seller_id, qty, total_price, shipping_address, phone]
+    );
+
+    // Reduce stock
+    await db.query(
+      'UPDATE marketplace_items SET stock = stock - ? WHERE id = ?',
+      [qty, item_id]
+    );
+
+    // Mark unavailable if stock hits 0
+    await db.query(
+      'UPDATE marketplace_items SET is_available = 0 WHERE id = ? AND stock <= 0',
+      [item_id]
+    );
+
+    res.status(201).json({
+      message: 'Order placed successfully',
+      order_id: result.insertId,
+      total_price,
+    });
+  } catch (err) {
+    console.error('POST /marketplace/order error:', err);
+    res.status(500).json({ message: 'Failed to place order' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: GET /api/marketplace/orders/mine  — My orders as buyer
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/orders/mine', verifyToken, async (req, res) => {
+  try {
+    const [orders] = await db.query(
+      `SELECT o.*, m.title AS item_title, m.image_url,
+              u.name AS seller_name
+       FROM orders o
+       JOIN marketplace_items m ON o.item_id = m.id
+       JOIN users u ON o.seller_id = u.id
+       WHERE o.buyer_id = ?
+       ORDER BY o.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load orders' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: GET /api/marketplace/orders/selling  — My orders as seller
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/orders/selling', verifyToken, async (req, res) => {
+  try {
+    const [orders] = await db.query(
+      `SELECT o.*, m.title AS item_title, m.image_url,
+              u.name AS buyer_name, u.email AS buyer_email
+       FROM orders o
+       JOIN marketplace_items m ON o.item_id = m.id
+       JOIN users u ON o.buyer_id = u.id
+       WHERE o.seller_id = ?
+       ORDER BY o.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load selling orders' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: GET /api/marketplace/my-items  — Seller sees their own listings
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/my-items', verifyToken, async (req, res) => {
+  try {
+    const [items] = await db.query(
+      `SELECT * FROM marketplace_items WHERE seller_id = ? ORDER BY created_at DESC`,
+      [req.user.id]
+    );
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load your items' });
+  }
+});
 
 module.exports = router;
