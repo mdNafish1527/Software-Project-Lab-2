@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/marketplace  — Browse all items (NO LOGIN REQUIRED)
+// PUBLIC: GET /api/marketplace
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
@@ -114,7 +114,7 @@ router.get('/recommended', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/marketplace/:id  — Item detail
+// PUBLIC: GET /api/marketplace/:id
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
@@ -141,9 +141,9 @@ router.get('/:id', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/marketplace  — Add new item (singer or organizer)
+// PROTECTED: POST /api/marketplace  — Add new item
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/', verifyToken, requireRole('singer', 'organizer'), async (req, res) => {
+router.post('/', authenticate, requireRole('singer', 'organizer'), async (req, res) => {
   try {
     const {
       title, description, price, original_price, category,
@@ -184,9 +184,9 @@ router.post('/', verifyToken, requireRole('singer', 'organizer'), async (req, re
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: PUT /api/marketplace/:id  — Update item
+// PROTECTED: PUT /api/marketplace/:id
 // ─────────────────────────────────────────────────────────────────────────────
-router.put('/:id', verifyToken, async (req, res) => {
+router.put('/:id', authenticate, async (req, res) => {
   try {
     const [rows] = await db.query(
       'SELECT * FROM marketplace_items WHERE id = ? AND seller_id = ?',
@@ -226,9 +226,9 @@ router.put('/:id', verifyToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: DELETE /api/marketplace/:id  — Remove item
+// PROTECTED: DELETE /api/marketplace/:id
 // ─────────────────────────────────────────────────────────────────────────────
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', authenticate, async (req, res) => {
   try {
     const [rows] = await db.query(
       'SELECT * FROM marketplace_items WHERE id = ? AND seller_id = ?',
@@ -248,9 +248,9 @@ router.delete('/:id', verifyToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/marketplace/order  — Place an order
+// PROTECTED: POST /api/marketplace/order
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/order', verifyToken, async (req, res) => {
+router.post('/order', authenticate, async (req, res) => {
   try {
     const { item_id, quantity, shipping_address, phone } = req.body;
 
@@ -281,13 +281,11 @@ router.post('/order', verifyToken, async (req, res) => {
       [req.user.id, item_id, item.seller_id, qty, total_price, shipping_address, phone]
     );
 
-    // Reduce stock
     await db.query(
       'UPDATE marketplace_items SET stock = stock - ? WHERE id = ?',
       [qty, item_id]
     );
 
-    // Mark unavailable if stock hits 0
     await db.query(
       'UPDATE marketplace_items SET is_available = 0 WHERE id = ? AND stock <= 0',
       [item_id]
@@ -305,9 +303,9 @@ router.post('/order', verifyToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/marketplace/orders/mine  — My orders as buyer
+// PROTECTED: GET /api/marketplace/orders/mine
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/orders/mine', verifyToken, async (req, res) => {
+router.get('/orders/mine', authenticate, async (req, res) => {
   try {
     const [orders] = await db.query(
       `SELECT o.*, m.title AS item_title, m.image_url,
@@ -326,9 +324,9 @@ router.get('/orders/mine', verifyToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/marketplace/orders/selling  — My orders as seller
+// PROTECTED: GET /api/marketplace/orders/selling
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/orders/selling', verifyToken, async (req, res) => {
+router.get('/orders/selling', authenticate, async (req, res) => {
   try {
     const [orders] = await db.query(
       `SELECT o.*, m.title AS item_title, m.image_url,
@@ -347,9 +345,9 @@ router.get('/orders/selling', verifyToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/marketplace/my-items  — Seller sees their own listings
+// PROTECTED: GET /api/marketplace/my-items
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/my-items', verifyToken, async (req, res) => {
+router.get('/my-items', authenticate, async (req, res) => {
   try {
     const [items] = await db.query(
       `SELECT * FROM marketplace_items WHERE seller_id = ? ORDER BY created_at DESC`,
