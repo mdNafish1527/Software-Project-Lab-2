@@ -1,211 +1,170 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  FILE LOCATION: backend/routes/events.js
+//
+//  ADD THESE ROUTES AT THE TOP of your existing events.js file,
+//  BEFORE the routes that require auth middleware.
+//  These routes are PUBLIC — no login needed.
+// ═══════════════════════════════════════════════════════════════════════════
+
 const express = require('express');
 const router = express.Router();
-const pool = require('../db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const db = require('../db');
+// Keep your existing auth import below:
+// const { verifyToken, requireRole } = require('../middleware/auth');
 
-// GET /api/events - public: list live events
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC: GET /api/events  — Browse all concerts (NO LOGIN REQUIRED)
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { city, search } = req.query;
-    let query = `
-      SELECT e.*, 
-        org.unique_username as organizer_name,
-        s.unique_username as singer_name,
-        s.profile_picture as singer_pic
-      FROM EVENT e
-      JOIN USER org ON e.organizer_id = org.u_id
-      JOIN USER s ON e.singer_id = s.u_id
-      WHERE e.status='live'
-    `;
-    const params = [];
-    if (city) { query += ' AND e.city=?'; params.push(city); }
-    if (search) { query += ' AND e.title LIKE ?'; params.push(`%${search}%`); }
-    query += ' ORDER BY e.date ASC';
-    const [rows] = await pool.query(query, params);
-    res.json(rows);
+    const { genre, status, search, page = 1, limit = 12, featured } = req.query;
+    const offset = (page - 1) * limit;
+
+    let where = [];
+    let params = [];
+
+    // Only show upcoming + completed (not cancelled) by default
+    if (status) {
+      where.push('e.status = ?');
+      params.push(status);
+    } else {
+      where.push("e.status IN ('upcoming', 'completed', 'ongoing')");
+    }
+
+    if (genre) {
+      where.push('e.genre LIKE ?');
+      params.push(`%${genre}%`);
+    }
+
+    if (search) {
+      where.push('(e.title LIKE ? OR e.description LIKE ? OR e.venue LIKE ? OR e.genre LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (featured === 'true') {
+      where.push('e.is_featured = 1');
+    }
+
+    const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+
+    // Count total for pagination
+    const [countRows] = await db.query(
+      `SELECT COUNT(*) as total FROM events e ${whereClause}`,
+      params
+    );
+    const total = countRows[0].total;
+
+    // Fetch events with organizer info
+    const [events] = await db.query(
+      `SELECT
+        e.id, e.title, e.description, e.venue, e.event_date, e.event_time,
+        e.duration_minutes, e.banner_image, e.genre, e.status,
+        e.ticket_price_general, e.ticket_price_vip, e.ticket_price_student,
+        e.total_tickets_general, e.total_tickets_vip, e.total_tickets_student,
+        e.sold_tickets_general, e.sold_tickets_vip, e.sold_tickets_student,
+        e.is_featured, e.custom_url, e.created_at,
+        u.name AS organizer_name, u.profile_pic AS organizer_pic,
+        s.name AS singer_name, s.profile_pic AS singer_pic
+      FROM events e
+      LEFT JOIN users u ON e.organizer_id = u.id
+      LEFT JOIN users s ON e.singer_id = s.id
+      ${whereClause}
+      ORDER BY e.is_featured DESC, e.event_date ASC
+      LIMIT ? OFFSET ?`,
+      [...params, parseInt(limit), parseInt(offset)]
+    );
+
+    res.json({
+      events,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit),
+      },
+    });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('GET /events error:', err);
+    res.status(500).json({ message: 'Failed to load events' });
   }
 });
 
-// GET /api/events/:id
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC: GET /api/events/featured  — Featured concerts for homepage
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/featured', async (req, res) => {
+  try {
+    const [events] = await db.query(
+      `SELECT
+        e.id, e.title, e.venue, e.event_date, e.event_time, e.banner_image,
+        e.genre, e.status, e.ticket_price_general, e.ticket_price_student,
+        e.is_featured, e.custom_url,
+        u.name AS organizer_name,
+        s.name AS singer_name
+      FROM events e
+      LEFT JOIN users u ON e.organizer_id = u.id
+      LEFT JOIN users s ON e.singer_id = s.id
+      WHERE e.is_featured = 1 AND e.status = 'upcoming'
+      ORDER BY e.event_date ASC
+      LIMIT 6`
+    );
+    res.json(events);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load featured events' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC: GET /api/events/genres  — List of all genres (for filter dropdown)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/genres', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT DISTINCT genre FROM events WHERE genre IS NOT NULL ORDER BY genre'
+    );
+    res.json(rows.map(r => r.genre));
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load genres' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC: GET /api/events/:id  — Concert detail (NO LOGIN REQUIRED)
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
-    const [rows] = await pool.query(`
-      SELECT e.*, 
-        org.unique_username as organizer_name,
-        s.unique_username as singer_name,
-        s.profile_picture as singer_pic
-      FROM EVENT e
-      JOIN USER org ON e.organizer_id = org.u_id
-      JOIN USER s ON e.singer_id = s.u_id
-      WHERE e.event_id=?
-    `, [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ message: 'Event not found' });
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
+    const idOrSlug = req.params.id;
 
-// POST /api/events/booking - organizer requests booking from singer
-router.post('/booking', authenticate, requireRole('organizer'), async (req, res) => {
-  try {
-    const { singer_id, date, venue, city } = req.body;
-
-    // Check singer is available
-    const [sp] = await pool.query('SELECT availability FROM SINGER_PROFILE WHERE singer_id=?', [singer_id]);
-    if (sp.length === 0 || sp[0].availability !== 'available')
-      return res.status(400).json({ message: 'Singer is not available' });
-
-    const [result] = await pool.query(
-      'INSERT INTO BOOKING_REQUEST (organizer_id, singer_id, date, venue, city) VALUES (?,?,?,?,?)',
-      [req.user.u_id, singer_id, date, venue, city]
+    const [rows] = await db.query(
+      `SELECT
+        e.*,
+        u.name AS organizer_name, u.email AS organizer_email,
+        u.profile_pic AS organizer_pic, u.bio AS organizer_bio,
+        s.name AS singer_name, s.profile_pic AS singer_pic, s.bio AS singer_bio
+      FROM events e
+      LEFT JOIN users u ON e.organizer_id = u.id
+      LEFT JOIN users s ON e.singer_id = s.id
+      WHERE e.id = ? OR e.custom_url = ?`,
+      [idOrSlug, idOrSlug]
     );
-    res.status(201).json({ message: 'Booking request sent', booking_id: result.insertId });
+
+    if (!rows.length) return res.status(404).json({ message: 'Event not found' });
+
+    const event = rows[0];
+
+    // Ticket availability info
+    event.available_general = Math.max(0, event.total_tickets_general - event.sold_tickets_general);
+    event.available_vip = Math.max(0, event.total_tickets_vip - event.sold_tickets_vip);
+    event.available_student = Math.max(0, event.total_tickets_student - event.sold_tickets_student);
+
+    res.json(event);
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('GET /events/:id error:', err);
+    res.status(500).json({ message: 'Failed to load event' });
   }
 });
 
-// GET /api/events/bookings/mine - singer sees their booking requests
-router.get('/bookings/mine', authenticate, requireRole('singer'), async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT br.*, org.unique_username as organizer_name
-      FROM BOOKING_REQUEST br
-      JOIN USER org ON br.organizer_id = org.u_id
-      WHERE br.singer_id=?
-      ORDER BY br.created_at DESC
-    `, [req.user.u_id]);
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// PUT /api/events/booking/:id/respond - singer accepts/rejects
-router.put('/booking/:id/respond', authenticate, requireRole('singer'), async (req, res) => {
-  try {
-    const { action } = req.body; // 'accepted' or 'rejected'
-    const [bookings] = await pool.query(
-      'SELECT * FROM BOOKING_REQUEST WHERE booking_id=? AND singer_id=?',
-      [req.params.id, req.user.u_id]
-    );
-    if (bookings.length === 0) return res.status(404).json({ message: 'Booking not found' });
-    await pool.query('UPDATE BOOKING_REQUEST SET status=? WHERE booking_id=?', [action, req.params.id]);
-    res.json({ message: `Booking ${action}` });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// POST /api/events/booking/:id/pay - organizer pays singer fee
-router.post('/booking/:id/pay', authenticate, requireRole('organizer'), async (req, res) => {
-  try {
-    const [bookings] = await pool.query(
-      'SELECT * FROM BOOKING_REQUEST WHERE booking_id=? AND organizer_id=? AND status=?',
-      [req.params.id, req.user.u_id, 'accepted']
-    );
-    if (bookings.length === 0) return res.status(404).json({ message: 'No accepted booking found' });
-    await pool.query('UPDATE BOOKING_REQUEST SET payment_status=? WHERE booking_id=?', ['paid', req.params.id]);
-    res.json({ message: 'Payment successful. You can now create the concert.' });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// POST /api/events - organizer creates event after paying
-router.post('/', authenticate, requireRole('organizer'), async (req, res) => {
-  try {
-    const { booking_id, title, description, poster, tier1_price, tier1_quantity,
-      tier2_price, tier2_quantity, tier3_price, tier3_quantity, dynamic_pricing_enable } = req.body;
-
-    const [bookings] = await pool.query(
-      'SELECT * FROM BOOKING_REQUEST WHERE booking_id=? AND organizer_id=? AND payment_status=?',
-      [booking_id, req.user.u_id, 'paid']
-    );
-    if (bookings.length === 0)
-      return res.status(400).json({ message: 'Booking must be paid before creating event' });
-
-    const booking = bookings[0];
-    const [result] = await pool.query(
-      `INSERT INTO EVENT 
-        (organizer_id, singer_id, title, description, poster, date, time, venue, city, fee, status,
-         dynamic_pricing_enable, tier1_price, tier1_quantity, tier2_price, tier2_quantity, tier3_price, tier3_quantity)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [req.user.u_id, booking.singer_id, title, description, poster,
-        booking.date, '20:00:00', booking.venue, booking.city, 0,
-        'approved', dynamic_pricing_enable || false,
-        tier1_price, tier1_quantity, tier2_price, tier2_quantity, tier3_price, tier3_quantity]
-    );
-    res.status(201).json({ message: 'Concert created', event_id: result.insertId });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// POST /api/events/:id/launch - go live
-router.post('/:id/launch', authenticate, requireRole('organizer'), async (req, res) => {
-  try {
-    await pool.query(
-      'UPDATE EVENT SET status=?, launch=TRUE WHERE event_id=? AND organizer_id=?',
-      ['live', req.params.id, req.user.u_id]
-    );
-    res.json({ message: 'Concert is now live!' });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// POST /api/events/:id/custom-url - request custom URL
-router.post('/:id/custom-url', authenticate, requireRole('organizer'), async (req, res) => {
-  try {
-    const { custom_url } = req.body;
-    await pool.query(
-      'UPDATE EVENT SET custom_url=?, custom_url_status=? WHERE event_id=? AND organizer_id=?',
-      [custom_url, 'pending', req.params.id, req.user.u_id]
-    );
-    res.json({ message: 'Custom URL request submitted for admin approval' });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// POST /api/events/:id/approve-url - admin approves custom URL
-router.post('/:id/approve-url', authenticate, requireRole('admin'), async (req, res) => {
-  try {
-    await pool.query(
-      "UPDATE EVENT SET custom_url_status='approved' WHERE event_id=?",
-      [req.params.id]
-    );
-    res.json({ message: 'Custom URL approved' });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// GET /api/events/organizer/mine
-router.get('/organizer/mine', authenticate, requireRole('organizer'), async (req, res) => {
-  try {
-    const [rows] = await pool.query(
-      'SELECT * FROM EVENT WHERE organizer_id=? ORDER BY created_at DESC',
-      [req.user.u_id]
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// GET /api/events/admin/all - admin sees all events
-router.get('/admin/all', authenticate, requireRole('admin'), async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT * FROM EVENT ORDER BY created_at DESC');
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
+// ─── YOUR EXISTING AUTH-PROTECTED ROUTES CONTINUE BELOW ───────────────────
+// (booking, creating events, launching, etc. — keep those as they are)
 
 module.exports = router;
