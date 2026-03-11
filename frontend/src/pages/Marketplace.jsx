@@ -1,12 +1,7 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  FILE LOCATION: frontend/src/pages/Marketplace.jsx
-//  REPLACE your existing Marketplace.jsx with this file entirely.
-// ═══════════════════════════════════════════════════════════════════════════
-
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
-import { AuthContext } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 const CATEGORIES = [
   'All', 'Books & Notes', 'Electronics', 'Clothing', 'Food & Snacks',
@@ -123,7 +118,7 @@ function ProductCard({ item, onBuyClick }) {
 
 export default function Marketplace() {
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext) || {};
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [featured, setFeatured] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -170,7 +165,6 @@ export default function Marketplace() {
 
   const handleBuyClick = (item) => {
     if (!user) {
-      // Not logged in — show modal prompting login
       setSelectedItem(item);
     } else {
       navigate(`/marketplace/${item.id}`);
@@ -223,7 +217,7 @@ export default function Marketplace() {
 
           {/* Featured grid preview */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {featured.slice(0, 4).map((item, i) => (
+            {featured.slice(0, 4).map((item) => (
               <div key={item.id}
                 onClick={() => handleBuyClick(item)}
                 style={{ borderRadius: '12px', overflow: 'hidden', cursor: 'pointer', height: '130px', position: 'relative' }}
@@ -381,7 +375,7 @@ export default function Marketplace() {
         )}
       </div>
 
-      {/* Login prompt modal for non-logged-in users clicking buy */}
+      {/* Login prompt modal */}
       {selectedItem && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
           onClick={() => setSelectedItem(null)}>
