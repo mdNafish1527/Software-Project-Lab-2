@@ -1,71 +1,80 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import zarinPhoto from '../assets/zarin.jpg';
-import nafishPhoto from '../assets/nafish.jpg';
 
-const Footer = () => {
+export default function Footer() {
+  const year = new Date().getFullYear();
+
   return (
-    <>
-      {/* Developers Section */}
-      <section className="developers">
-        <div className="container">
-          <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-            <h2 className="section-title">Meet the Developers</h2>
-            <p className="section-sub">The minds behind GaanBajna</p>
+    <footer className="footer">
+      <div className="footer-grid">
+        {/* Brand column */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <div className="navbar-logo-icon" style={{ width: '32px', height: '32px', fontSize: '14px' }}>🎵</div>
+            <div className="footer-brand-title">GAANBAJNA</div>
           </div>
-          <div className="dev-grid">
-            <div className="dev-card">
-              <img src={zarinPhoto} alt="Kazi Zarin Tasnim" className="dev-avatar" />
-              <div className="dev-name">Kazi Zarin Tasnim</div>
-              <div className="dev-role">Full Stack Developer</div>
-            </div>
-            <div className="dev-card">
-              <img src={nafishPhoto} alt="Nafish Salehin" className="dev-avatar" />
-              <div className="dev-name">Nafish Salehin</div>
-              <div className="dev-role">Full Stack Developer</div>
-            </div>
+          <p className="footer-brand-sub">
+            Where every beat tells a story.<br />
+            A music event platform connecting<br />
+            artists, organizers, and audiences.
+          </p>
+          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+            <span className="badge badge-cyan">IIT – DU</span>
+            <span className="badge badge-gold">Semester Final</span>
           </div>
         </div>
-      </section>
 
-      {/* Footer */}
-      <footer className="footer">
-        <div className="container">
-          <div className="footer-top">
-            <div className="footer-brand">
-              <h2>🎵 GaanBajna</h2>
-              <p>Bangladesh's premier music event platform. Connecting artists, organizers, and audiences through the power of music.</p>
-            </div>
-            <div className="footer-col">
-              <h4>Platform</h4>
-              <ul>
-                <li><Link to="/concerts">Browse Concerts</Link></li>
-                <li><Link to="/singers">Find Artists</Link></li>
-                <li><Link to="/marketplace">Marketplace</Link></li>
-                <li><Link to="/register">Join Us</Link></li>
-              </ul>
-            </div>
-            <div className="footer-col">
-              <h4>Roles</h4>
-              <ul>
-                <li><a href="#">For Audiences</a></li>
-                <li><a href="#">For Singers</a></li>
-                <li><a href="#">For Organizers</a></li>
-                <li><a href="#">Admin Panel</a></li>
-              </ul>
-            </div>
+        {/* Platform links */}
+        <div>
+          <div className="footer-col-title">Platform</div>
+          <ul className="footer-links">
+            <li><Link to="/concerts">Browse Concerts</Link></li>
+            <li><Link to="/singers">Discover Artists</Link></li>
+            <li><Link to="/marketplace">Marketplace</Link></li>
+            <li><Link to="/register">Join Now</Link></li>
+          </ul>
+        </div>
+
+        {/* Account links */}
+        <div>
+          <div className="footer-col-title">Account</div>
+          <ul className="footer-links">
+            <li><Link to="/login">Login</Link></li>
+            <li><Link to="/register">Register</Link></li>
+            <li><Link to="/forgot-password">Reset Password</Link></li>
+            <li><Link to="/dashboard/audience">My Tickets</Link></li>
+          </ul>
+        </div>
+
+        {/* Tech stack */}
+        <div>
+          <div className="footer-col-title">Tech Stack</div>
+          <ul className="footer-links">
+            <li><a href="#">React.js</a></li>
+            <li><a href="#">Node.js + Express</a></li>
+            <li><a href="#">MySQL Database</a></li>
+            <li><a href="#">JWT Auth</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="footer-bottom">
+        <div className="footer-copy">
+          © {year} GaanBajna — All rights reserved
+        </div>
+        <div className="footer-devs">
+          <span style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--text-dim)' }}>
+            BUILT BY
+          </span>
+          <div className="dev-chip">
+            <div className="team-avatar kz" style={{ width: '20px', height: '20px', fontSize: '8px' }}>KZ</div>
+            <span style={{ color: 'var(--text-secondary)' }}>Kazi Zarin Tasnim</span>
           </div>
-          <hr className="footer-divider" />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <p style={{ color: 'var(--muted)', fontSize: 13 }}>
-              © {new Date().getFullYear()} GaanBajna. Developed by Kazi Zarin Tasnim & Nafish Salehin.
-            </p>
-            <p style={{ color: 'var(--muted)', fontSize: 13 }}>Semester Final Project 🎓</p>
+          <div className="dev-chip">
+            <div className="team-avatar ns" style={{ width: '20px', height: '20px', fontSize: '8px' }}>NS</div>
+            <span style={{ color: 'var(--text-secondary)' }}>Nafish Salehin</span>
           </div>
         </div>
-      </footer>
-    </>
+      </div>
+    </footer>
   );
-};
-
-export default Footer;
+}
