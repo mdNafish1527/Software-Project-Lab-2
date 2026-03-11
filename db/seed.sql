@@ -1,168 +1,257 @@
 -- ============================================================
--- GaanBajna Seed Data — Run after schema.sql
--- All passwords are: Password@123
+--  GaanBajna — seed.sql
+--  Run AFTER schema.sql:
+--    source /path/to/db/schema.sql
+--    source /path/to/db/seed.sql
 -- ============================================================
+
 USE gaanbajna;
 
 -- ============================================================
--- USERS
+-- 1. USERS
+--    Passwords below are bcrypt hashes of "Password123!"
+--    Replace with real hashes if you change the password.
+--    status = 'approved'  → required for singers & organizers
+--    status = 'active'    → for audience & admin
 -- ============================================================
-INSERT INTO USER (unique_username, email, password, role, status, profile_picture) VALUES
+
+INSERT INTO users (name, email, password_hash, role, status, is_verified) VALUES
+
 -- Admin
-('admin', 'admin@gaanbajna.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'admin', 'active', 'https://i.pravatar.cc/150?img=1'),
+('Admin GaanBajna',   'admin@gaanbajna.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'admin', 'active', 1),
 
--- Singers
-('rafi_hossain', 'rafi@gaanbajna.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'singer', 'active', 'https://i.pravatar.cc/150?img=11'),
-('nandita_roy', 'nandita@gaanbajna.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'singer', 'active', 'https://i.pravatar.cc/150?img=5'),
-('arman_alif', 'arman@gaanbajna.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'singer', 'active', 'https://i.pravatar.cc/150?img=12'),
-('tahsan_rahman', 'tahsan@gaanbajna.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'singer', 'active', 'https://i.pravatar.cc/150?img=15'),
-('mithila_hasan', 'mithila@gaanbajna.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'singer', 'active', 'https://i.pravatar.cc/150?img=9'),
+-- Singers (must be approved to appear on /singers page)
+('Arif Alvi',         'arif@gaanbajna.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'singer', 'approved', 1),
 
--- Organizers
-('soundwave_events', 'soundwave@gaanbajna.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'organizer', 'active', 'https://i.pravatar.cc/150?img=20'),
-('dhaka_live', 'dhakalive@gaanbajna.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'organizer', 'active', 'https://i.pravatar.cc/150?img=21'),
-('stage_craft', 'stagecraft@gaanbajna.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'organizer', 'active', 'https://i.pravatar.cc/150?img=22'),
+('Nnancy',            'nancy@gaanbajna.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'singer', 'approved', 1),
+
+('Imran',             'imran@gaanbajna.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'singer', 'approved', 1),
+
+('Kona',              'kona@gaanbajna.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'singer', 'approved', 1),
+
+('Habib Wahid',       'habib@gaanbajna.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'singer', 'approved', 1),
+
+-- Organizers (must be approved to create events)
+('SoundWave Events',  'soundwave@gaanbajna.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'organizer', 'approved', 1),
+
+('Dhaka Live',        'dhakalive@gaanbajna.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'organizer', 'approved', 1),
 
 -- Audience
-('zahid_fan', 'zahid@gmail.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'audience', 'active', 'https://i.pravatar.cc/150?img=30'),
-('priya_music', 'priya@gmail.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uMe5aBTZi', 'audience', 'active', 'https://i.pravatar.cc/150?img=31');
+('Rahim Hossain',     'rahim@example.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'audience', 'active', 1),
+
+('Sumaiya Akter',     'sumaiya@example.com',
+ '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
+ 'audience', 'active', 1);
+
 
 -- ============================================================
--- SINGER PROFILES
+-- 2. SINGER PROFILES
+--    Linked to users by user_id (adjust IDs if needed)
+--    availability = 1 → available for booking
 -- ============================================================
-INSERT INTO SINGER_PROFILE (singer_id, bio, fixed_fee, availability, genre) VALUES
-(2, 'Rafi Hossain is a soulful Bangla pop and R&B artist from Dhaka. Known for his velvety voice and heartfelt lyrics, he has captivated audiences across Bangladesh with chart-topping hits.', 75000.00, 'available', 'Bangla Pop / R&B'),
-(3, 'Nandita Roy is a versatile playback and live performer celebrated for blending classical Bangladeshi music with modern sounds. Her performances are an unforgettable journey.', 90000.00, 'available', 'Classical Fusion'),
-(4, 'Arman Alif rose to fame with his acoustic storytelling style. His songs about love, loss, and life resonate deeply with millions of listeners across the country.', 80000.00, 'available', 'Acoustic / Folk'),
-(5, 'Tahsan Rahman is an icon of Bangladeshi music — a multi-talented singer, actor, and composer whose romantic anthems have defined a generation.', 120000.00, 'unavailable', 'Bangla Pop / Romantic'),
-(6, 'Mithila Hasan is a rising star blending Baul folk traditions with contemporary beats, bringing the heart of rural Bangladesh to urban stages.', 60000.00, 'available', 'Baul Folk / Contemporary');
 
--- ============================================================
--- BOOKING REQUESTS (paid)
--- ============================================================
-INSERT INTO BOOKING_REQUEST (organizer_id, singer_id, date, venue, city, status, payment_status) VALUES
-(7, 2, '2026-04-15', 'Bangladesh National Museum Auditorium', 'Dhaka', 'accepted', 'paid'),
-(8, 3, '2026-04-22', 'Chittagong Convention Hall', 'Chittagong', 'accepted', 'paid'),
-(9, 4, '2026-05-01', 'Bashundhara Convention City', 'Dhaka', 'accepted', 'paid'),
-(7, 6, '2026-05-10', 'Sylhet International Cricket Stadium', 'Sylhet', 'accepted', 'paid'),
-(8, 5, '2026-06-05', 'Army Stadium', 'Dhaka', 'accepted', 'paid');
+-- Get singer user IDs (assuming auto-increment started at 1):
+--   admin=1, arif=2, nancy=3, imran=4, kona=5, habib=6
+--   soundwave=7, dhakalive=8, rahim=9, sumaiya=10
+
+INSERT INTO singer_profiles (user_id, bio, genre, fee, availability) VALUES
+(2, 'Award-winning Bangladeshi folk-fusion artist with 15+ years on stage.', 'Folk / Fusion', 50000, 1),
+(3, 'Pop sensation known for soulful ballads and high-energy live shows.',   'Pop',           40000, 1),
+(4, 'Chart-topping modern Bangla pop artist loved by millions.',             'Pop / R&B',     45000, 1),
+(5, 'Queen of Bangla indie — her voice is unmistakable.',                    'Indie / Soul',  38000, 1),
+(6, 'Legendary fusion maestro blending Rabindra sangeet with jazz.',         'Fusion / Jazz', 60000, 1);
+
 
 -- ============================================================
--- EVENTS (Live concerts for showcase)
+-- 3. EVENTS / CONCERTS
+--    status = 'live'  → REQUIRED to appear on /concerts page
+--    organizer_id must match an organizer user
 -- ============================================================
-INSERT INTO EVENT (organizer_id, singer_id, title, description, poster, date, time, venue, city, fee, status, dynamic_pricing_enable, tier1_price, tier1_quantity, tier2_price, tier2_quantity, tier3_price, tier3_quantity, launch) VALUES
 
-(7, 2, 'Rafi Unplugged — Acoustic Night',
-'An intimate evening with Rafi Hossain performing his greatest hits in a raw, acoustic setting. Expect emotional storytelling through music you have never heard this way before. Limited seats available for a truly personal experience.',
-'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800',
-'2026-04-15', '19:00:00', 'Bangladesh National Museum Auditorium', 'Dhaka',
-75000.00, 'live', FALSE,
-500.00, 150, 1000.00, 100, 1500.00, 50, TRUE),
+INSERT INTO events
+  (title, description, date, venue, organizer_id, status, custom_url,
+   total_tickets, tickets_sold, is_dynamic_pricing)
+VALUES
 
-(8, 3, 'Nandita — Classical Fusion Night',
-'Nandita Roy brings together the finest traditions of Bangladeshi classical music and modern arrangements in a spectacular one-night showcase. A cultural experience not to be missed.',
-'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=800',
-'2026-04-22', '18:30:00', 'Chittagong Convention Hall', 'Chittagong',
-90000.00, 'live', TRUE,
-600.00, 200, 1200.00, 120, 2000.00, 60, TRUE),
+('Dhaka Music Fiesta 2025',
+ 'The biggest open-air music festival in Dhaka featuring top Bangladeshi artists. Two stages, food stalls, and non-stop music from 4 PM.',
+ '2025-12-20 16:00:00', 'Bashundhara City Convention Hall, Dhaka',
+ 7, 'live', 'dhaka-music-fiesta-2025',
+ 1000, 120, 0),
 
-(9, 4, 'Arman Alif — Golpo Gaan',
-'Arman Alif takes the stage for an extraordinary night of storytelling through song. Each track is a chapter, each verse a feeling. Come be part of the story.',
-'https://images.unsplash.com/photo-1501612780327-45045538702b?w=800',
-'2026-05-01', '20:00:00', 'Bashundhara Convention City', 'Dhaka',
-80000.00, 'live', FALSE,
-400.00, 300, 800.00, 150, 1200.00, 80, TRUE),
+('Eid Special Night Concert',
+ 'Celebrate Eid with a magical evening of music, featuring Habib Wahid and special guests.',
+ '2025-04-01 19:00:00', 'Army Stadium, Dhaka',
+ 7, 'live', 'eid-special-night',
+ 2000, 450, 0),
 
-(7, 6, 'Mithila — Baul by the River',
-'Experience the soulful sounds of Mithila Hasan as she celebrates the timeless Baul folk tradition of Bangladesh. An open-air concert under the stars in the heart of Sylhet.',
-'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800',
-'2026-05-10', '17:30:00', 'Sylhet International Cricket Stadium', 'Sylhet',
-60000.00, 'live', FALSE,
-300.00, 400, 600.00, 200, 900.00, 100, TRUE),
+('Bangla Rock Night',
+ 'A high-energy rock night showcasing Bangladesh\'s best bands and solo artists. Expect an unforgettable night of riffs and rhythms.',
+ '2025-11-15 18:00:00', 'International Convention City Bashundhara, Dhaka',
+ 8, 'live', 'bangla-rock-night',
+ 800, 200, 1),
 
-(8, 5, 'Tahsan Live — The Grand Concert',
-'The most anticipated concert of the year! Tahsan Rahman returns to the stage for a massive live show featuring all his greatest hits spanning two decades of iconic Bangladeshi music.',
-'https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?w=800',
-'2026-06-05', '20:30:00', 'Army Stadium', 'Dhaka',
-120000.00, 'live', TRUE,
-800.00, 500, 1500.00, 250, 3000.00, 100, TRUE);
+('Kolkata–Dhaka Friendship Concert',
+ 'A cross-border musical celebration bringing together artists from Kolkata and Dhaka on one stage.',
+ '2025-10-10 17:00:00', 'Bangladesh National Museum Auditorium, Dhaka',
+ 8, 'live', 'kolkata-dhaka-friendship',
+ 500, 80, 0),
 
--- ============================================================
--- MARKETPLACE ITEMS
--- ============================================================
-INSERT INTO ITEM (seller_id, event_id, name, type, description, price, stock_quantity, photo) VALUES
+('Acoustic Evenings Vol. 3',
+ 'An intimate acoustic session featuring Kona and Nancy in a cozy venue — perfect for music lovers who appreciate raw, unplugged performances.',
+ '2025-09-05 18:30:00', 'The Daily Star Centre, Dhaka',
+ 7, 'live', 'acoustic-evenings-vol-3',
+ 300, 60, 0);
 
--- Rafi's merch (event 1)
-(2, 1, 'Rafi Unplugged Official T-Shirt', 'T-Shirt',
-'Limited edition official concert t-shirt. 100% cotton, unisex sizing. Features Rafi''s signature artwork on the back.',
-850.00, 120,
-'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400'),
-
-(2, 1, 'Rafi Hossain — Signed Album "Nishitto"', 'Album',
-'The debut studio album by Rafi Hossain, hand-signed by the artist himself. Includes 12 original tracks and a personal note.',
-1200.00, 50,
-'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=400'),
-
-(2, NULL, 'Rafi Acoustic Guitar Pick Set', 'Accessory',
-'A set of 5 custom guitar picks used by Rafi during live performances. Comes in a collectible tin case.',
-350.00, 200,
-'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=400'),
-
--- Nandita's merch (event 2)
-(3, 2, 'Nandita Classical Fusion Poster — A2 Print', 'Poster',
-'High-quality A2 glossy art print featuring Nandita Roy from her Classical Fusion Night tour. Perfect for framing.',
-450.00, 80,
-'https://images.unsplash.com/photo-1619983081563-430f63602796?w=400'),
-
-(3, 2, 'Nandita Fusion Night Hoodie', 'Hoodie',
-'Premium quality hoodie with embroidered GaanBajna and Nandita Roy logo. Available in black and navy.',
-1500.00, 60,
-'https://images.unsplash.com/photo-1556821840-3a63f15732ce?w=400'),
-
--- Arman's merch (event 3)
-(4, 3, 'Arman Alif "Golpo Gaan" Limited Vinyl', 'Vinyl Record',
-'A limited run of 200 vinyl records featuring Arman Alif''s most beloved acoustic tracks. Each numbered and signed.',
-2500.00, 40,
-'https://images.unsplash.com/photo-1593787406988-ce1ad31d4b49?w=400'),
-
-(4, 3, 'Arman Alif Concert Tote Bag', 'Bag',
-'Canvas tote bag with hand-drawn artwork by Arman Alif. Eco-friendly and spacious. A must-have for any fan.',
-600.00, 150,
-'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400'),
-
--- Mithila's merch
-(6, 4, 'Mithila Baul Ektar — Handcrafted', 'Instrument',
-'A traditional one-stringed Baul instrument (Ektar) handcrafted by artisans in Kushtia, endorsed by Mithila Hasan.',
-3500.00, 20,
-'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400'),
-
-(6, NULL, 'Mithila Hasan — Folk Songs CD Collection', 'Album',
-'A 3-disc collection of Mithila''s folk song recordings. Includes rare early recordings and studio favourites.',
-900.00, 75,
-'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=400'),
-
--- Tahsan's merch (event 5)
-(5, 5, 'Tahsan Official Cap — Grand Concert Edition', 'Cap',
-'Official snapback cap from Tahsan''s Grand Concert. Embroidered logo and limited run of 500 pieces.',
-750.00, 100,
-'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400'),
-
-(5, 5, 'Tahsan 20th Anniversary Photo Book', 'Book',
-'A stunning 200-page hardcover photo book celebrating 20 years of Tahsan''s music career. Behind-the-scenes, rare photos, and personal messages.',
-2200.00, 35,
-'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400'),
-
--- Organizer merch
-(7, NULL, 'GaanBajna Official Merchandise Bundle', 'Bundle',
-'The ultimate GaanBajna fan bundle — includes a T-shirt, cap, tote bag, and exclusive sticker pack.',
-2000.00, 50,
-'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=400');
 
 -- ============================================================
--- Done! Use these accounts to test:
--- 
--- Admin:     admin@gaanbajna.com      / Password@123
--- Singer:    rafi@gaanbajna.com       / Password@123
--- Organizer: soundwave@gaanbajna.com  / Password@123
--- Audience:  zahid@gmail.com          / Password@123
+-- 4. TICKET TIERS
+--    Each event gets up to 3 tiers (as per schema)
+-- ============================================================
+
+-- Event 1: Dhaka Music Fiesta 2025
+INSERT INTO ticket_tiers (event_id, tier_name, price, total_seats, seats_sold) VALUES
+(1, 'General',  500,  600, 80),
+(1, 'Premium',  1200, 300, 35),
+(1, 'VIP',      2500, 100, 5);
+
+-- Event 2: Eid Special Night
+INSERT INTO ticket_tiers (event_id, tier_name, price, total_seats, seats_sold) VALUES
+(2, 'General',  800,  1200, 300),
+(2, 'Premium',  1800,  600, 120),
+(2, 'VIP',      3500,  200, 30);
+
+-- Event 3: Bangla Rock Night
+INSERT INTO ticket_tiers (event_id, tier_name, price, total_seats, seats_sold) VALUES
+(3, 'General',  600,  500, 150),
+(3, 'Premium',  1500, 200, 40),
+(3, 'VIP',      3000, 100, 10);
+
+-- Event 4: Kolkata–Dhaka Friendship
+INSERT INTO ticket_tiers (event_id, tier_name, price, total_seats, seats_sold) VALUES
+(4, 'General',  700,  300, 60),
+(4, 'Premium',  1600, 150, 18),
+(4, 'VIP',      3200,  50, 2);
+
+-- Event 5: Acoustic Evenings
+INSERT INTO ticket_tiers (event_id, tier_name, price, total_seats, seats_sold) VALUES
+(5, 'General',  400,  200, 45),
+(5, 'Premium',  900,   80, 13),
+(5, 'VIP',      1800,  20, 2);
+
+
+-- ============================================================
+-- 5. EVENT SINGERS (which singers perform at which event)
+--    Assumes a junction table event_singers(event_id, singer_id)
+--    singer_id = user_id of the singer
+-- ============================================================
+
+INSERT INTO event_singers (event_id, singer_id) VALUES
+(1, 2), (1, 3), (1, 4),   -- Fiesta: Arif, Nancy, Imran
+(2, 6), (2, 3),            -- Eid: Habib, Nancy
+(3, 4), (3, 2),            -- Rock: Imran, Arif
+(4, 5), (4, 6),            -- Friendship: Kona, Habib
+(5, 5), (5, 3);            -- Acoustic: Kona, Nancy
+
+
+-- ============================================================
+-- 6. MARKETPLACE ITEMS (Products)
+--    seller_id must be a valid user (singer or organizer)
+--    status = 'active' to appear in marketplace listing
+-- ============================================================
+
+INSERT INTO marketplace_items
+  (seller_id, name, description, price, stock, category, status)
+VALUES
+
+-- Arif Alvi (singer, id=2)
+(2, 'Arif Alvi Signed Poster',
+ 'Limited edition A2 concert poster, hand-signed by Arif Alvi. Perfect for your music room.',
+ 850, 50, 'Merchandise', 'active'),
+
+(2, 'Folk Fusion Acoustic CD',
+ 'Arif Alvi\'s latest studio album "Mati O Sur" — physical CD with exclusive booklet.',
+ 499, 100, 'Music', 'active'),
+
+-- Nancy (singer, id=3)
+(3, 'Nancy Concert T-Shirt',
+ 'Premium cotton T-shirt with Nancy\'s signature Eid Concert 2025 artwork. Sizes S–XXL.',
+ 699, 200, 'Apparel', 'active'),
+
+(3, 'Nancy Tote Bag',
+ 'Eco-friendly canvas tote bag with Nancy\'s iconic logo print.',
+ 350, 150, 'Merchandise', 'active'),
+
+-- Imran (singer, id=4)
+(4, 'Imran Autographed Album Cover',
+ 'Printed album cover of "Valobasha Korbo" autographed by Imran himself.',
+ 600, 75, 'Merchandise', 'active'),
+
+(4, 'Pop Hits Collection USB',
+ 'All of Imran\'s hit tracks loaded on a branded USB drive. Plug and play!',
+ 799, 60, 'Music', 'active'),
+
+-- Kona (singer, id=5)
+(5, 'Kona Indie Vinyl Record',
+ 'Limited run vinyl of Kona\'s debut album "Nil Akash" — collector\'s edition.',
+ 1200, 30, 'Music', 'active'),
+
+(5, 'Kona Wristband Set',
+ 'Set of 3 silicone wristbands from the Acoustic Evenings tour.',
+ 199, 300, 'Merchandise', 'active'),
+
+-- Habib Wahid (singer, id=6)
+(6, 'Habib Wahid Guitar Pick Set',
+ 'Pack of 10 custom guitar picks used and signed by Habib Wahid during live shows.',
+ 450, 80, 'Merchandise', 'active'),
+
+(6, 'Jazz Fusion Live CD',
+ 'Live recording of Habib Wahid\'s sold-out Friendship Concert performance.',
+ 550, 120, 'Music', 'active'),
+
+-- SoundWave Events (organizer, id=7)
+(7, 'GaanBajna Festival Hoodie',
+ 'Official GaanBajna 2025 festival hoodie — thick fleece, unisex sizing.',
+ 1500, 100, 'Apparel', 'active'),
+
+(7, 'VIP Lanyard & Wristband Combo',
+ 'Genuine VIP lanyard and wristband from Dhaka Music Fiesta 2025.',
+ 299, 200, 'Merchandise', 'active'),
+
+-- Dhaka Live (organizer, id=8)
+(8, 'Bangla Rock Night Poster (Framed)',
+ 'Official Bangla Rock Night 2025 gig poster in a premium wooden frame. Ready to hang.',
+ 1800, 25, 'Merchandise', 'active'),
+
+(8, 'Concert Photography Print Pack',
+ 'Set of 5 high-quality 8×10 prints from Dhaka Live\'s best concert moments.',
+ 999, 40, 'Photography', 'active');
+
+
+-- ============================================================
+-- QUICK VERIFICATION QUERIES
+-- Run these to confirm data is correctly inserted:
+--
+--   SELECT id, name, role, status FROM users;
+--   SELECT id, title, status, date FROM events;
+--   SELECT id, name, price, stock, status FROM marketplace_items;
+--   SELECT sp.user_id, u.name, sp.genre, sp.fee FROM singer_profiles sp JOIN users u ON sp.user_id = u.id;
 -- ============================================================
