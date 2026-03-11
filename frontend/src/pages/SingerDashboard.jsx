@@ -1,9 +1,9 @@
-import { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import api from '../api';
 
 export default function SingerDashboard() {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [profile, setProfile] = useState({});
   const [items, setItems] = useState([]);
