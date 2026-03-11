@@ -1,8 +1,4 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import './styles/global.css';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
@@ -21,81 +17,113 @@ import SingerDashboard from './pages/SingerDashboard';
 import OrganizerDashboard from './pages/OrganizerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 
-const ProtectedRoute = ({ children, role }) => {
+import './styles/global.css';
+
+function PrivateRoute({ children, roles }) {
   const { user, loading } = useAuth();
-  if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="spinner" /></div>;
-  if (!user) return <Navigate to="/login" />;
-  if (role && user.role !== role) return <Navigate to={`/${user.role}/dashboard`} />;
-  return children;
-};
-
-const PendingPage = () => (
-  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 24 }}>
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: '4rem', marginBottom: 16 }}>⏳</div>
-      <h2 style={{ fontFamily: 'Playfair Display, serif', marginBottom: 12 }}>Account Under Review</h2>
-      <p style={{ color: 'var(--muted)', maxWidth: 400 }}>Your account is being reviewed by our admin team. We'll contact you via email soon. Thank you for your patience!</p>
+  if (loading) return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: '#040810'
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div className="spinner" style={{ margin: '0 auto 16px' }} />
+        <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
+          LOADING SYSTEM...
+        </div>
+      </div>
     </div>
-  </div>
-);
-
-const AppContent = () => {
-  const { user } = useAuth();
-  // Hide navbar/footer on dashboard pages
-  const dashboardRoles = ['audience', 'singer', 'organizer', 'admin'];
-  const isDashboard = user && dashboardRoles.some(r => window.location.pathname.includes(`/${r}/dashboard`));
-
-  return (
-    <>
-      {!isDashboard && <Navbar />}
-      <Routes>
-        <Route path="/" element={<><Home /><Footer /></>} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/register/pending" element={<PendingPage />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/concerts" element={<><Navbar /><Concerts /><Footer /></>} />
-        <Route path="/concerts/:id" element={<><Navbar /><ConcertDetail /></>} />
-        <Route path="/singers" element={<><Navbar /><Singers /><Footer /></>} />
-        <Route path="/marketplace" element={<><Navbar /><Marketplace /><Footer /></>} />
-
-        <Route path="/audience/dashboard" element={
-          <ProtectedRoute role="audience"><AudienceDashboard /></ProtectedRoute>
-        } />
-        <Route path="/singer/dashboard" element={
-          <ProtectedRoute role="singer"><SingerDashboard /></ProtectedRoute>
-        } />
-        <Route path="/organizer/dashboard" element={
-          <ProtectedRoute role="organizer"><OrganizerDashboard /></ProtectedRoute>
-        } />
-        <Route path="/admin/dashboard" element={
-          <ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>
-        } />
-
-        <Route path="*" element={
-          <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-            <h1 style={{ fontFamily: 'Playfair Display, serif', fontSize: '5rem', color: 'var(--gold)' }}>404</h1>
-            <p style={{ color: 'var(--muted)' }}>Page not found</p>
-            <a href="/" className="btn btn-primary">Go Home</a>
-          </div>
-        } />
-      </Routes>
-      <ToastContainer
-        position="bottom-right"
-        autoClose={3500}
-        hideProgressBar={false}
-        theme="dark"
-      />
-    </>
   );
-};
+  if (!user) return <Navigate to="/login" />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/" />;
+  return children;
+}
 
-const App = () => (
-  <AuthProvider>
-    <BrowserRouter>
-      <AppContent />
-    </BrowserRouter>
-  </AuthProvider>
-);
+function AppRoutes() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Navbar />
+      <div style={{ flex: 1 }}>
+        <Routes>
+          {/* Public */}
+          <Route path="/"              element={<Home />} />
+          <Route path="/login"         element={<Login />} />
+          <Route path="/register"      element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/concerts"      element={<Concerts />} />
+          <Route path="/concerts/:id"  element={<ConcertDetail />} />
+          <Route path="/singers"       element={<Singers />} />
+          <Route path="/singers/:id"   element={<Singers />} />
+          <Route path="/marketplace"   element={<Marketplace />} />
 
-export default App;
+          {/* Protected: Audience */}
+          <Route path="/dashboard/audience" element={
+            <PrivateRoute roles={['audience']}>
+              <AudienceDashboard />
+            </PrivateRoute>
+          } />
+
+          {/* Protected: Singer */}
+          <Route path="/dashboard/singer" element={
+            <PrivateRoute roles={['singer']}>
+              <SingerDashboard />
+            </PrivateRoute>
+          } />
+
+          {/* Protected: Organizer */}
+          <Route path="/dashboard/organizer" element={
+            <PrivateRoute roles={['organizer']}>
+              <OrganizerDashboard />
+            </PrivateRoute>
+          } />
+
+          {/* Protected: Admin */}
+          <Route path="/dashboard/admin" element={
+            <PrivateRoute roles={['admin']}>
+              <AdminDashboard />
+            </PrivateRoute>
+          } />
+
+          {/* 404 */}
+          <Route path="*" element={
+            <div style={{
+              minHeight: '60vh', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px'
+            }}>
+              <div style={{
+                fontFamily: 'var(--text-display)', fontSize: '80px', color: 'var(--text-dim)',
+                letterSpacing: '0.1em', lineHeight: 1, marginBottom: '16px', opacity: 0.3
+              }}>
+                404
+              </div>
+              <div style={{
+                fontFamily: 'var(--text-mono)', fontSize: '14px', letterSpacing: '0.15em',
+                color: 'var(--text-secondary)', marginBottom: '8px'
+              }}>
+                PAGE NOT FOUND
+              </div>
+              <div style={{
+                fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)',
+                marginBottom: '28px'
+              }}>
+                The requested resource does not exist
+              </div>
+              <a href="/" className="btn btn-primary">← RETURN HOME</a>
+            </div>
+          } />
+        </Routes>
+      </div>
+      <Footer />
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
