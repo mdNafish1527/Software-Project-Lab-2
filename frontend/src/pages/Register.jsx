@@ -12,10 +12,14 @@ export default function Register() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    role: '', name: '', email: '', password: '', confirmPassword: '', otp: ''
+    role: '', username: '', email: '', password: '', confirmPassword: '', otp: ''
   });
+  // FIX #3: track profile picture as base64 string
+  const [profilePicture, setProfilePicture] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verified, setVerified] = useState(false);   // step 3 success state
+  const [verifiedStatus, setVerifiedStatus] = useState('');
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -24,18 +28,42 @@ export default function Register() {
     setError('');
   };
 
+  // FIX #3: convert uploaded image to base64 so it can be sent in JSON body
+  const handleProfilePicChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setProfilePicture(reader.result);
+    reader.readAsDataURL(file);
+  };
+
   const handleStep1Next = () => {
     if (!form.role) { setError('Please select a role.'); return; }
     setError(''); setStep(2);
   };
 
   const handleStep2Next = async () => {
-    if (!form.name || !form.email || !form.password) { setError('All fields required.'); return; }
+    // FIX #1: check 'username' instead of 'name'
+    if (!form.username || !form.email || !form.password) { setError('All fields required.'); return; }
     if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return; }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    // FIX #2: backend requires >= 8 characters, not 6
+    if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    // FIX #3: require profile picture for singer/organizer
+    if (['singer', 'organizer'].includes(form.role) && !profilePicture) {
+      setError('Profile picture is required for Artist/Organizer.'); return;
+    }
+
     setLoading(true); setError('');
     try {
-      await api.post('/auth/register', { name: form.name, email: form.email, password: form.password, role: form.role });
+      // FIX #1: send 'username' (not 'name') to match backend's expected field
+      // FIX #3: send 'profile_picture' for singer/organizer
+      await api.post('/auth/register', {
+        username: form.username,
+        email: form.email,
+        password: form.password,
+        role: form.role,
+        profile_picture: profilePicture || null,
+      });
       setStep(3);
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed.');
@@ -48,8 +76,15 @@ export default function Register() {
     if (!form.otp) { setError('Enter the OTP sent to your email.'); return; }
     setLoading(true); setError('');
     try {
-      await api.post('/auth/verify-otp', { email: form.email, otp: form.otp });
-      navigate('/login');
+      const res = await api.post('/auth/verify-otp', { email: form.email, otp: form.otp });
+      const status = res.data?.status;
+      setVerifiedStatus(status);
+      setVerified(true);
+      // Audience is active immediately — redirect to login after 2 seconds
+      if (status === 'active') {
+        setTimeout(() => navigate('/login'), 2000);
+      }
+      // Singer/Organizer stay pending — no redirect, show waiting message
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid OTP.');
     } finally {
@@ -160,10 +195,11 @@ export default function Register() {
         {/* ── STEP 2: Details ── */}
         {step === 2 && (
           <div>
+            {/* FIX #1: field renamed from 'name' → 'username' to match backend */}
             <div className="form-group">
-              <label className="form-label">Full Name</label>
-              <input className="form-control" name="name" placeholder="Your full name"
-                value={form.name} onChange={handleChange} />
+              <label className="form-label">Username</label>
+              <input className="form-control" name="username" placeholder="Your unique username"
+                value={form.username} onChange={handleChange} />
             </div>
             <div className="form-group">
               <label className="form-label">Email Address</label>
@@ -171,8 +207,9 @@ export default function Register() {
                 value={form.email} onChange={handleChange} />
             </div>
             <div className="form-group">
+              {/* FIX #2: updated placeholder to say Min 8 characters */}
               <label className="form-label">Password</label>
-              <input className="form-control" type="password" name="password" placeholder="Min 6 characters"
+              <input className="form-control" type="password" name="password" placeholder="Min 8 characters"
                 value={form.password} onChange={handleChange} />
             </div>
             <div className="form-group">
@@ -180,6 +217,30 @@ export default function Register() {
               <input className="form-control" type="password" name="confirmPassword" placeholder="Repeat password"
                 value={form.confirmPassword} onChange={handleChange} />
             </div>
+
+            {/* FIX #3: show profile picture upload for singer/organizer */}
+            {['singer', 'organizer'].includes(form.role) && (
+              <div className="form-group">
+                <label className="form-label">Profile Picture <span style={{ color: 'var(--cyan)' }}>*</span></label>
+                <input
+                  className="form-control"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePicChange}
+                  style={{ padding: '8px' }}
+                />
+                {profilePicture && (
+                  <div style={{ marginTop: '8px', textAlign: 'center' }}>
+                    <img
+                      src={profilePicture}
+                      alt="Preview"
+                      style={{ width: '72px', height: '72px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--cyan)' }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
               <button className="btn btn-ghost btn-lg" style={{ flex: 1 }} onClick={() => setStep(1)}>
                 ← BACK
@@ -194,32 +255,80 @@ export default function Register() {
         {/* ── STEP 3: OTP ── */}
         {step === 3 && (
           <div>
-            <div style={{
-              padding: '14px', background: 'var(--cyan-dim)',
-              border: '1px solid rgba(0,212,255,0.2)', borderRadius: 'var(--radius-sm)',
-              fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--cyan)',
-              marginBottom: '20px', letterSpacing: '0.05em'
-            }}>
-              ● OTP sent to {form.email}
-            </div>
-            <div className="form-group">
-              <label className="form-label">Verification OTP</label>
-              <input className="form-control" name="otp" placeholder="Enter 6-digit code"
-                value={form.otp} onChange={handleChange}
-                style={{ textAlign: 'center', fontSize: '20px', letterSpacing: '0.4em' }} />
-            </div>
-            <button className="btn btn-solid-cyan btn-lg btn-block" onClick={handleVerifyOtp} disabled={loading}>
-              {loading ? 'VERIFYING...' : '⚡ VERIFY & ACTIVATE'}
-            </button>
-            <div style={{ textAlign: 'center', marginTop: '14px' }}>
-              <button onClick={handleResendOtp} style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)',
-                letterSpacing: '0.05em'
+            {/* ── Success: Audience (active immediately) ── */}
+            {verified && verifiedStatus === 'active' && (
+              <div style={{
+                padding: '24px', background: 'rgba(0,255,100,0.05)',
+                border: '1px solid rgba(0,255,100,0.3)', borderRadius: 'var(--radius-sm)',
+                textAlign: 'center', fontFamily: 'var(--text-mono)'
               }}>
-                Resend OTP →
-              </button>
-            </div>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>✅</div>
+                <div style={{ color: '#00ff64', fontSize: '14px', letterSpacing: '0.1em', marginBottom: '8px' }}>
+                  EMAIL VERIFIED!
+                </div>
+                <div style={{ color: 'var(--text-dim)', fontSize: '11px' }}>
+                  Your account is active. Redirecting to login...
+                </div>
+              </div>
+            )}
+
+            {/* ── Success: Singer/Organizer (pending admin approval) ── */}
+            {verified && verifiedStatus === 'pending' && (
+              <div style={{
+                padding: '24px', background: 'var(--cyan-dim)',
+                border: '1px solid rgba(0,212,255,0.3)', borderRadius: 'var(--radius-sm)',
+                textAlign: 'center', fontFamily: 'var(--text-mono)'
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
+                <div style={{ color: 'var(--cyan)', fontSize: '14px', letterSpacing: '0.1em', marginBottom: '8px' }}>
+                  EMAIL VERIFIED!
+                </div>
+                <div style={{ color: 'var(--text-dim)', fontSize: '11px', lineHeight: '1.7' }}>
+                  Your account is <strong style={{ color: 'var(--cyan)' }}>pending admin approval</strong>.<br />
+                  We will notify you at <strong>{form.email}</strong> once approved.<br /><br />
+                  <span style={{ fontSize: '10px' }}>This usually takes 24–48 hours.</span>
+                </div>
+                <button
+                  className="btn btn-ghost btn-lg"
+                  style={{ marginTop: '20px', width: '100%' }}
+                  onClick={() => navigate('/login')}
+                >
+                  ← Back to Login
+                </button>
+              </div>
+            )}
+
+            {/* ── OTP input form (before verification) ── */}
+            {!verified && (
+              <>
+                <div style={{
+                  padding: '14px', background: 'var(--cyan-dim)',
+                  border: '1px solid rgba(0,212,255,0.2)', borderRadius: 'var(--radius-sm)',
+                  fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--cyan)',
+                  marginBottom: '20px', letterSpacing: '0.05em'
+                }}>
+                  ● OTP sent to {form.email}
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Verification OTP</label>
+                  <input className="form-control" name="otp" placeholder="Enter 6-digit code"
+                    value={form.otp} onChange={handleChange}
+                    style={{ textAlign: 'center', fontSize: '20px', letterSpacing: '0.4em' }} />
+                </div>
+                <button className="btn btn-solid-cyan btn-lg btn-block" onClick={handleVerifyOtp} disabled={loading}>
+                  {loading ? 'VERIFYING...' : '⚡ VERIFY & ACTIVATE'}
+                </button>
+                <div style={{ textAlign: 'center', marginTop: '14px' }}>
+                  <button onClick={handleResendOtp} style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)',
+                    letterSpacing: '0.05em'
+                  }}>
+                    Resend OTP →
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
