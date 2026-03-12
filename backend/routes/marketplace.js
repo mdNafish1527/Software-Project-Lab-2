@@ -1,96 +1,98 @@
 const express = require('express');
-const router = express.Router();
-const db = require('../db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const router  = express.Router();
+const db      = require('../db');
+const { authenticate } = require('../middleware/auth');
+
+// Helper: consistent item SELECT columns
+// Always returns: id, name, photo, type, description, price,
+//                 stock_quantity, original_price, is_featured,
+//                 condition_status, seller_name, seller_dept,
+//                 seller_hall, seller_contact, tags
+const ITEM_SELECT = `
+  i.item_id        AS id,
+  i.name,
+  i.description,
+  i.price,
+  i.original_price,
+  i.type,
+  i.photo,
+  i.stock_quantity,
+  i.is_featured,
+  i.is_available,
+  i.condition_status,
+  i.seller_name,
+  i.seller_dept,
+  i.seller_hall,
+  i.seller_contact,
+  i.tags,
+  i.created_at,
+  u.unique_username AS seller_username,
+  u.profile_picture AS seller_pic
+`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC: GET /api/marketplace
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { category, search, min_price, max_price, condition: cond,
-            page = 1, limit = 12, sort = 'newest', featured } = req.query;
-    const offset = (page - 1) * limit;
+    const {
+      type, category, search,
+      min_price, max_price, condition,
+      page = 1, limit = 12, sort = 'newest',
+    } = req.query;
 
-    let where = ['m.is_available = 1'];
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    let where  = ['i.stock_quantity > 0'];
     let params = [];
 
-    if (category) {
-      where.push('m.category = ?');
-      params.push(category);
-    }
+    // FIX #2: accept both "type" and "category" params
+    const typeFilter = type || category;
+    if (typeFilter) { where.push('i.type = ?'); params.push(typeFilter); }
+
     if (search) {
-      where.push('(m.title LIKE ? OR m.description LIKE ? OR m.tags LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      where.push('(i.name LIKE ? OR i.description LIKE ? OR i.type LIKE ? OR i.tags LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
-    if (min_price) { where.push('m.price >= ?'); params.push(Number(min_price)); }
-    if (max_price) { where.push('m.price <= ?'); params.push(Number(max_price)); }
-    if (cond) { where.push('m.condition_status = ?'); params.push(cond); }
-    if (featured === 'true') { where.push('m.is_featured = 1'); }
+    if (min_price) { where.push('i.price >= ?'); params.push(Number(min_price)); }
+    if (max_price) { where.push('i.price <= ?'); params.push(Number(max_price)); }
+    if (condition) { where.push('i.condition_status = ?'); params.push(condition); }
 
     const whereClause = 'WHERE ' + where.join(' AND ');
-
     const orderMap = {
-      newest: 'm.created_at DESC',
-      oldest: 'm.created_at ASC',
-      price_asc: 'm.price ASC',
-      price_desc: 'm.price DESC',
-      featured: 'm.is_featured DESC, m.created_at DESC',
+      newest:    'i.is_featured DESC, i.created_at DESC',
+      oldest:    'i.created_at ASC',
+      price_asc: 'i.price ASC',
+      price_desc:'i.price DESC',
+      featured:  'i.is_featured DESC, i.created_at DESC',
     };
     const orderClause = 'ORDER BY ' + (orderMap[sort] || orderMap.newest);
 
-    const [countRows] = await db.query(
-      `SELECT COUNT(*) as total FROM marketplace_items m ${whereClause}`, params
+    const [[{ total }]] = await db.query(
+      `SELECT COUNT(*) as total FROM ITEM i ${whereClause}`, params
     );
-    const total = countRows[0].total;
 
     const [items] = await db.query(
-      `SELECT
-        m.id, m.title, m.description, m.price, m.original_price, m.category,
-        m.image_url, m.condition_status, m.seller_name, m.seller_dept,
-        m.seller_hall, m.stock, m.is_featured, m.tags, m.created_at
-      FROM marketplace_items m
-      ${whereClause}
-      ${orderClause}
-      LIMIT ? OFFSET ?`,
+      `SELECT ${ITEM_SELECT}
+       FROM ITEM i
+       LEFT JOIN USER u ON i.seller_id = u.u_id
+       ${whereClause}
+       ${orderClause}
+       LIMIT ? OFFSET ?`,
       [...params, parseInt(limit), parseInt(offset)]
-    );
-
-    const [cats] = await db.query(
-      'SELECT DISTINCT category FROM marketplace_items WHERE is_available = 1 ORDER BY category'
     );
 
     res.json({
       items,
-      categories: cats.map(c => c.category),
       pagination: {
         total,
-        page: parseInt(page),
+        page:  parseInt(page),
         limit: parseInt(limit),
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil(total / parseInt(limit)),
       },
     });
   } catch (err) {
-    console.error('GET /marketplace error:', err);
+    console.error('GET /marketplace:', err);
     res.status(500).json({ message: 'Failed to load marketplace' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/marketplace/featured
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/featured', async (req, res) => {
-  try {
-    const [items] = await db.query(
-      `SELECT id, title, price, original_price, category, image_url,
-              condition_status, seller_name, seller_dept, is_featured
-       FROM marketplace_items
-       WHERE is_available = 1 AND is_featured = 1
-       ORDER BY created_at DESC LIMIT 8`
-    );
-    res.json(items);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to load featured items' });
   }
 });
 
@@ -100,12 +102,12 @@ router.get('/featured', async (req, res) => {
 router.get('/recommended', async (req, res) => {
   try {
     const [items] = await db.query(
-      `SELECT id, title, price, original_price, category, image_url,
-              condition_status, seller_name, seller_dept
-       FROM marketplace_items
-       WHERE is_available = 1
-       ORDER BY is_featured DESC, created_at DESC
-       LIMIT 6`
+      `SELECT ${ITEM_SELECT}
+       FROM ITEM i
+       LEFT JOIN USER u ON i.seller_id = u.u_id
+       WHERE i.stock_quantity > 0
+       ORDER BY i.is_featured DESC, i.created_at DESC
+       LIMIT 8`
     );
     res.json(items);
   } catch (err) {
@@ -114,26 +116,126 @@ router.get('/recommended', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/marketplace/:id
+// FIX #1: POST /api/marketplace/order  — Place an order after payment
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/order', authenticate, async (req, res) => {
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const {
+      items: orderItems,      // [{ item_id, quantity }]
+      transaction_id,
+      shipping_name,
+      shipping_phone,
+      shipping_address,
+      shipping_note,
+    } = req.body;
+
+    if (!orderItems || orderItems.length === 0)
+      return res.status(400).json({ message: 'No items in order' });
+    if (!shipping_name || !shipping_phone || !shipping_address)
+      return res.status(400).json({ message: 'Delivery details are required' });
+
+    // Calculate total & validate stock
+    let total = 0;
+    const resolved = [];
+    for (const { item_id, quantity = 1 } of orderItems) {
+      const [[item]] = await conn.query(
+        'SELECT item_id, name, price, stock_quantity FROM ITEM WHERE item_id = ?',
+        [item_id]
+      );
+      if (!item)
+        throw new Error(`Item ${item_id} not found`);
+      if (item.stock_quantity < quantity)
+        throw new Error(`Not enough stock for "${item.name}"`);
+      total += item.price * quantity;
+      resolved.push({ ...item, quantity });
+    }
+
+    // Create ORDER row
+    const [orderResult] = await conn.query(
+      `INSERT INTO \`ORDER\`
+         (buyer_id, total_amount, status, transaction_id,
+          shipping_name, shipping_phone, shipping_address, shipping_note)
+       VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)`,
+      [
+        req.user.u_id, total, transaction_id || null,
+        shipping_name, shipping_phone, shipping_address, shipping_note || null,
+      ]
+    );
+    const order_id = orderResult.insertId;
+
+    // Create ORDER_ITEM rows and deduct stock
+    for (const item of resolved) {
+      await conn.query(
+        'INSERT INTO ORDER_ITEM (order_id, item_id, quantity, price) VALUES (?,?,?,?)',
+        [order_id, item.item_id, item.quantity, item.price]
+      );
+      await conn.query(
+        'UPDATE ITEM SET stock_quantity = stock_quantity - ? WHERE item_id = ?',
+        [item.quantity, item.item_id]
+      );
+    }
+
+    await conn.commit();
+    res.status(201).json({ message: 'Order placed successfully!', order_id, total });
+
+  } catch (err) {
+    await conn.rollback();
+    console.error('POST /marketplace/order:', err);
+    res.status(500).json({ message: err.message || 'Failed to place order' });
+  } finally {
+    conn.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX #1: GET /api/marketplace/orders/mine  — User's order history
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/orders/mine', authenticate, async (req, res) => {
+  try {
+    const [orders] = await db.query(
+      `SELECT
+         o.order_id        AS id,
+         o.total_amount    AS total_price,
+         o.status,
+         o.transaction_id,
+         o.shipping_name,
+         o.shipping_phone,
+         o.shipping_address,
+         o.order_at,
+         GROUP_CONCAT(i.name SEPARATOR ', ') AS item_name,
+         SUM(oi.quantity)                    AS quantity
+       FROM \`ORDER\` o
+       JOIN ORDER_ITEM oi ON o.order_id = oi.order_id
+       JOIN ITEM i        ON oi.item_id = i.item_id
+       WHERE o.buyer_id = ?
+       GROUP BY o.order_id
+       ORDER BY o.order_at DESC`,
+      [req.user.u_id]
+    );
+    res.json(orders);
+  } catch (err) {
+    console.error('GET /marketplace/orders/mine:', err);
+    res.status(500).json({ message: 'Failed to load orders' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC: GET /api/marketplace/:id  — Item detail
+// (must be AFTER /recommended and /orders/mine to avoid route conflicts)
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT
-        m.*,
-        u.name AS seller_full_name, u.profile_pic AS seller_pic, u.bio AS seller_bio
-       FROM marketplace_items m
-       LEFT JOIN users u ON m.seller_id = u.id
-       WHERE m.id = ? AND m.is_available = 1`,
+      `SELECT ${ITEM_SELECT}
+       FROM ITEM i
+       LEFT JOIN USER u ON i.seller_id = u.u_id
+       WHERE i.item_id = ?`,
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Item not found' });
-
-    await db.query(
-      'UPDATE marketplace_items SET views = COALESCE(views, 0) + 1 WHERE id = ?',
-      [req.params.id]
-    );
-
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ message: 'Failed to load item' });
@@ -143,42 +245,34 @@ router.get('/:id', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PROTECTED: POST /api/marketplace  — Add new item
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/', authenticate, requireRole('singer', 'organizer'), async (req, res) => {
+router.post('/', authenticate, async (req, res) => {
   try {
     const {
-      title, description, price, original_price, category,
-      image_url, condition_status, seller_contact, seller_hall,
-      stock, tags,
+      name, type, description, price, stock_quantity,
+      photo, original_price, condition_status,
+      seller_name, seller_dept, seller_hall, seller_contact,
     } = req.body;
 
-    if (!title || !price || !category) {
-      return res.status(400).json({ message: 'title, price and category are required' });
-    }
-
-    const [userRows] = await db.query(
-      'SELECT name, role FROM users WHERE id = ?', [req.user.id]
-    );
-    const seller = userRows[0];
+    if (!name || !price || !type)
+      return res.status(400).json({ message: 'name, price and type are required' });
 
     const [result] = await db.query(
-      `INSERT INTO marketplace_items (
-        title, description, price, original_price, category,
-        image_url, condition_status, seller_id, seller_name,
-        seller_contact, seller_hall, stock, tags,
-        is_available, is_featured, views, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, NOW())`,
+      `INSERT INTO ITEM
+         (seller_id, name, type, description, price, original_price,
+          stock_quantity, photo, condition_status,
+          seller_name, seller_dept, seller_hall, seller_contact)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        title, description || '', price, original_price || null, category,
-        image_url || '', condition_status || 'Good',
-        req.user.id, seller.name,
-        seller_contact || '', seller_hall || '',
-        stock || 1, tags || '',
+        req.user.u_id, name, type, description || '', price,
+        original_price || null, stock_quantity || 1, photo || '',
+        condition_status || 'New',
+        seller_name || null, seller_dept || null,
+        seller_hall || null, seller_contact || null,
       ]
     );
-
     res.status(201).json({ message: 'Item listed successfully', item_id: result.insertId });
   } catch (err) {
-    console.error('POST /marketplace error:', err);
+    console.error('POST /marketplace:', err);
     res.status(500).json({ message: 'Failed to list item' });
   }
 });
@@ -189,37 +283,24 @@ router.post('/', authenticate, requireRole('singer', 'organizer'), async (req, r
 router.put('/:id', authenticate, async (req, res) => {
   try {
     const [rows] = await db.query(
-      'SELECT * FROM marketplace_items WHERE id = ? AND seller_id = ?',
-      [req.params.id, req.user.id]
+      'SELECT * FROM ITEM WHERE item_id = ? AND seller_id = ?',
+      [req.params.id, req.user.u_id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Item not found or not yours' });
 
-    const {
-      title, description, price, original_price, category,
-      image_url, condition_status, stock, tags, is_available,
-    } = req.body;
-
+    const { name, type, description, price, stock_quantity, photo } = req.body;
     await db.query(
-      `UPDATE marketplace_items SET
-        title = COALESCE(?, title),
-        description = COALESCE(?, description),
-        price = COALESCE(?, price),
-        original_price = COALESCE(?, original_price),
-        category = COALESCE(?, category),
-        image_url = COALESCE(?, image_url),
-        condition_status = COALESCE(?, condition_status),
-        stock = COALESCE(?, stock),
-        tags = COALESCE(?, tags),
-        is_available = COALESCE(?, is_available)
-       WHERE id = ?`,
-      [
-        title, description, price, original_price, category,
-        image_url, condition_status, stock, tags, is_available,
-        req.params.id,
-      ]
+      `UPDATE ITEM SET
+         name           = COALESCE(?, name),
+         type           = COALESCE(?, type),
+         description    = COALESCE(?, description),
+         price          = COALESCE(?, price),
+         stock_quantity = COALESCE(?, stock_quantity),
+         photo          = COALESCE(?, photo)
+       WHERE item_id = ?`,
+      [name, type, description, price, stock_quantity, photo, req.params.id]
     );
-
-    res.json({ message: 'Item updated successfully' });
+    res.json({ message: 'Item updated' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to update item' });
   }
@@ -231,131 +312,14 @@ router.put('/:id', authenticate, async (req, res) => {
 router.delete('/:id', authenticate, async (req, res) => {
   try {
     const [rows] = await db.query(
-      'SELECT * FROM marketplace_items WHERE id = ? AND seller_id = ?',
-      [req.params.id, req.user.id]
+      'SELECT * FROM ITEM WHERE item_id = ? AND seller_id = ?',
+      [req.params.id, req.user.u_id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Item not found or not yours' });
-
-    await db.query(
-      'UPDATE marketplace_items SET is_available = 0 WHERE id = ?',
-      [req.params.id]
-    );
-
-    res.json({ message: 'Item removed from marketplace' });
+    await db.query('UPDATE ITEM SET stock_quantity = 0 WHERE item_id = ?', [req.params.id]);
+    res.json({ message: 'Item removed' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to remove item' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/marketplace/order
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/order', authenticate, async (req, res) => {
-  try {
-    const { item_id, quantity, shipping_address, phone } = req.body;
-
-    if (!item_id || !shipping_address || !phone) {
-      return res.status(400).json({ message: 'item_id, shipping_address and phone are required' });
-    }
-
-    const [itemRows] = await db.query(
-      'SELECT * FROM marketplace_items WHERE id = ? AND is_available = 1',
-      [item_id]
-    );
-    if (!itemRows.length) return res.status(404).json({ message: 'Item not found or unavailable' });
-
-    const item = itemRows[0];
-    const qty = quantity || 1;
-
-    if (item.stock < qty) {
-      return res.status(400).json({ message: `Only ${item.stock} in stock` });
-    }
-
-    const total_price = item.price * qty;
-
-    const [result] = await db.query(
-      `INSERT INTO orders (
-        buyer_id, item_id, seller_id, quantity, total_price,
-        shipping_address, phone, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`,
-      [req.user.id, item_id, item.seller_id, qty, total_price, shipping_address, phone]
-    );
-
-    await db.query(
-      'UPDATE marketplace_items SET stock = stock - ? WHERE id = ?',
-      [qty, item_id]
-    );
-
-    await db.query(
-      'UPDATE marketplace_items SET is_available = 0 WHERE id = ? AND stock <= 0',
-      [item_id]
-    );
-
-    res.status(201).json({
-      message: 'Order placed successfully',
-      order_id: result.insertId,
-      total_price,
-    });
-  } catch (err) {
-    console.error('POST /marketplace/order error:', err);
-    res.status(500).json({ message: 'Failed to place order' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/marketplace/orders/mine
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/orders/mine', authenticate, async (req, res) => {
-  try {
-    const [orders] = await db.query(
-      `SELECT o.*, m.title AS item_title, m.image_url,
-              u.name AS seller_name
-       FROM orders o
-       JOIN marketplace_items m ON o.item_id = m.id
-       JOIN users u ON o.seller_id = u.id
-       WHERE o.buyer_id = ?
-       ORDER BY o.created_at DESC`,
-      [req.user.id]
-    );
-    res.json(orders);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to load orders' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/marketplace/orders/selling
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/orders/selling', authenticate, async (req, res) => {
-  try {
-    const [orders] = await db.query(
-      `SELECT o.*, m.title AS item_title, m.image_url,
-              u.name AS buyer_name, u.email AS buyer_email
-       FROM orders o
-       JOIN marketplace_items m ON o.item_id = m.id
-       JOIN users u ON o.buyer_id = u.id
-       WHERE o.seller_id = ?
-       ORDER BY o.created_at DESC`,
-      [req.user.id]
-    );
-    res.json(orders);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to load selling orders' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/marketplace/my-items
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/my-items', authenticate, async (req, res) => {
-  try {
-    const [items] = await db.query(
-      `SELECT * FROM marketplace_items WHERE seller_id = ? ORDER BY created_at DESC`,
-      [req.user.id]
-    );
-    res.json(items);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to load your items' });
   }
 });
 
