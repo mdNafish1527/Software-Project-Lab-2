@@ -6,14 +6,15 @@ import api from '../api';
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: '', password: '' });
+  // FIX: renamed 'email' → 'identifier' to match backend's expected field name
+  const [form, setForm] = useState({ identifier: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async () => {
-    if (!form.email || !form.password) {
+    if (!form.identifier || !form.password) {
       setError('All fields required.');
       return;
     }
@@ -23,7 +24,7 @@ export default function Login() {
       const res = await api.post('/auth/login', form);
       login(res.data.token, res.data.user);
       const role = res.data.user?.role;
-      if (role === 'admin')      navigate('/dashboard/admin');
+      if (role === 'admin')          navigate('/dashboard/admin');
       else if (role === 'singer')    navigate('/dashboard/singer');
       else if (role === 'organizer') navigate('/dashboard/organizer');
       else                           navigate('/dashboard/audience');
@@ -61,13 +62,14 @@ export default function Login() {
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="form-group">
-          <label className="form-label">Email Address</label>
+          {/* FIX: label updated to "Email or Username", name changed to 'identifier' */}
+          <label className="form-label">Email or Username</label>
           <input
             className="form-control"
-            type="email"
-            name="email"
-            placeholder="user@example.com"
-            value={form.email}
+            type="text"
+            name="identifier"
+            placeholder="user@example.com or username"
+            value={form.identifier}
             onChange={handleChange}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
           />
