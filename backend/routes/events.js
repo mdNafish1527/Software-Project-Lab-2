@@ -4,11 +4,11 @@ const db = require('../db');
 const { authenticate, requireRole } = require('../middleware/auth');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/events
+// PUBLIC: GET /api/events  — Browse all concerts
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { genre, status, search, page = 1, limit = 12, featured } = req.query;
+    const { search, status, page = 1, limit = 12 } = req.query;
     const offset = (page - 1) * limit;
 
     let where = [];
@@ -18,46 +18,37 @@ router.get('/', async (req, res) => {
       where.push('e.status = ?');
       params.push(status);
     } else {
-      where.push("e.status IN ('upcoming', 'completed', 'ongoing')");
-    }
-
-    if (genre) {
-      where.push('e.genre LIKE ?');
-      params.push(`%${genre}%`);
+      where.push("e.status IN ('approved', 'live', 'ended')");
     }
 
     if (search) {
-      where.push('(e.title LIKE ? OR e.description LIKE ? OR e.venue LIKE ? OR e.genre LIKE ?)');
+      where.push('(e.title LIKE ? OR e.description LIKE ? OR e.venue LIKE ? OR e.city LIKE ?)');
       params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
 
-    if (featured === 'true') {
-      where.push('e.is_featured = 1');
-    }
-
-    const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const whereClause = 'WHERE ' + where.join(' AND ');
 
     const [countRows] = await db.query(
-      `SELECT COUNT(*) as total FROM events e ${whereClause}`,
-      params
+      `SELECT COUNT(*) as total FROM EVENT e ${whereClause}`, params
     );
     const total = countRows[0].total;
 
     const [events] = await db.query(
       `SELECT
-        e.id, e.title, e.description, e.venue, e.event_date, e.event_time,
-        e.duration_minutes, e.banner_image, e.genre, e.status,
-        e.ticket_price_general, e.ticket_price_vip, e.ticket_price_student,
-        e.total_tickets_general, e.total_tickets_vip, e.total_tickets_student,
-        e.sold_tickets_general, e.sold_tickets_vip, e.sold_tickets_student,
-        e.is_featured, e.custom_url, e.created_at,
-        u.name AS organizer_name, u.profile_pic AS organizer_pic,
-        s.name AS singer_name, s.profile_pic AS singer_pic
-      FROM events e
-      LEFT JOIN users u ON e.organizer_id = u.id
-      LEFT JOIN users s ON e.singer_id = s.id
+        e.event_id AS id, e.title, e.description, e.poster AS banner_image,
+        e.date AS event_date, e.time AS event_time, e.venue, e.city,
+        e.fee, e.status, e.custom_url, e.launch,
+        e.tier1_price, e.tier1_quantity,
+        e.tier2_price, e.tier2_quantity,
+        e.tier3_price, e.tier3_quantity,
+        e.created_at,
+        o.unique_username AS organizer_name, o.profile_picture AS organizer_pic,
+        s.unique_username AS singer_name,    s.profile_picture AS singer_pic
+      FROM EVENT e
+      LEFT JOIN USER o ON e.organizer_id = o.u_id
+      LEFT JOIN USER s ON e.singer_id    = s.u_id
       ${whereClause}
-      ORDER BY e.is_featured DESC, e.event_date ASC
+      ORDER BY e.date ASC
       LIMIT ? OFFSET ?`,
       [...params, parseInt(limit), parseInt(offset)]
     );
@@ -84,16 +75,15 @@ router.get('/featured', async (req, res) => {
   try {
     const [events] = await db.query(
       `SELECT
-        e.id, e.title, e.venue, e.event_date, e.event_time, e.banner_image,
-        e.genre, e.status, e.ticket_price_general, e.ticket_price_student,
-        e.is_featured, e.custom_url,
-        u.name AS organizer_name,
-        s.name AS singer_name
-      FROM events e
-      LEFT JOIN users u ON e.organizer_id = u.id
-      LEFT JOIN users s ON e.singer_id = s.id
-      WHERE e.is_featured = 1 AND e.status = 'upcoming'
-      ORDER BY e.event_date ASC
+        e.event_id AS id, e.title, e.poster AS banner_image,
+        e.date AS event_date, e.time AS event_time,
+        e.venue, e.city, e.status, e.custom_url,
+        e.tier1_price, e.tier2_price, e.tier3_price,
+        s.unique_username AS singer_name
+      FROM EVENT e
+      LEFT JOIN USER s ON e.singer_id = s.u_id
+      WHERE e.status IN ('approved', 'live')
+      ORDER BY e.date ASC
       LIMIT 6`
     );
     res.json(events);
@@ -103,21 +93,7 @@ router.get('/featured', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/events/genres
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/genres', async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      'SELECT DISTINCT genre FROM events WHERE genre IS NOT NULL ORDER BY genre'
-    );
-    res.json(rows.map(r => r.genre));
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to load genres' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/events/:id
+// PUBLIC: GET /api/events/:id  — Concert detail
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
@@ -125,23 +101,36 @@ router.get('/:id', async (req, res) => {
 
     const [rows] = await db.query(
       `SELECT
-        e.*,
-        u.name AS organizer_name, u.email AS organizer_email,
-        u.profile_pic AS organizer_pic, u.bio AS organizer_bio,
-        s.name AS singer_name, s.profile_pic AS singer_pic, s.bio AS singer_bio
-      FROM events e
-      LEFT JOIN users u ON e.organizer_id = u.id
-      LEFT JOIN users s ON e.singer_id = s.id
-      WHERE e.id = ? OR e.custom_url = ?`,
+        e.event_id AS id, e.title, e.description, e.poster AS banner_image,
+        e.date AS event_date, e.time AS event_time, e.venue, e.city,
+        e.fee, e.status, e.custom_url, e.launch,
+        e.tier1_price, e.tier1_quantity,
+        e.tier2_price, e.tier2_quantity,
+        e.tier3_price, e.tier3_quantity,
+        e.created_at,
+        o.unique_username AS organizer_name, o.profile_picture AS organizer_pic,
+        s.unique_username AS singer_name,    s.profile_picture AS singer_pic
+      FROM EVENT e
+      LEFT JOIN USER o ON e.organizer_id = o.u_id
+      LEFT JOIN USER s ON e.singer_id    = s.u_id
+      WHERE e.event_id = ? OR e.custom_url = ?`,
       [idOrSlug, idOrSlug]
     );
 
     if (!rows.length) return res.status(404).json({ message: 'Event not found' });
 
+    // Get remaining tickets per tier
     const event = rows[0];
-    event.available_general = Math.max(0, event.total_tickets_general - event.sold_tickets_general);
-    event.available_vip     = Math.max(0, event.total_tickets_vip     - event.sold_tickets_vip);
-    event.available_student = Math.max(0, event.total_tickets_student - event.sold_tickets_student);
+    const [sold] = await db.query(
+      `SELECT tier, COUNT(*) as sold FROM TICKET WHERE event_id = ? GROUP BY tier`,
+      [event.id]
+    );
+    const soldMap = {};
+    sold.forEach(r => soldMap[r.tier] = r.sold);
+
+    event.available_tier1 = Math.max(0, (event.tier1_quantity || 0) - (soldMap[1] || 0));
+    event.available_tier2 = Math.max(0, (event.tier2_quantity || 0) - (soldMap[2] || 0));
+    event.available_tier3 = Math.max(0, (event.tier3_quantity || 0) - (soldMap[3] || 0));
 
     res.json(event);
   } catch (err) {
@@ -151,21 +140,19 @@ router.get('/:id', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events/booking
+// PROTECTED: POST /api/events/booking  — Organizer books a singer
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/booking', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const { singer_id, event_date, venue, message, proposed_fee } = req.body;
-    if (!singer_id || !event_date || !venue) {
+    if (!singer_id || !event_date || !venue)
       return res.status(400).json({ message: 'singer_id, event_date and venue are required' });
-    }
 
     const [result] = await db.query(
-      `INSERT INTO bookings (organizer_id, singer_id, event_date, venue, message, proposed_fee, status, created_at)
+      `INSERT INTO BOOKING_REQUEST (organizer_id, singer_id, event_date, venue, message, proposed_fee, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())`,
-      [req.user.id, singer_id, event_date, venue, message || '', proposed_fee || 0]
+      [req.user.u_id, singer_id, event_date, venue, message || '', proposed_fee || 0]
     );
-
     res.status(201).json({ message: 'Booking request sent', booking_id: result.insertId });
   } catch (err) {
     console.error('POST /booking error:', err);
@@ -174,17 +161,17 @@ router.post('/booking', authenticate, requireRole('organizer'), async (req, res)
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/events/bookings/mine
+// PROTECTED: GET /api/events/bookings/mine  — Singer sees booking requests
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/bookings/mine', authenticate, requireRole('singer'), async (req, res) => {
   try {
     const [bookings] = await db.query(
-      `SELECT b.*, u.name AS organizer_name, u.email AS organizer_email
-       FROM bookings b
-       JOIN users u ON b.organizer_id = u.id
+      `SELECT b.*, o.unique_username AS organizer_name, o.email AS organizer_email
+       FROM BOOKING_REQUEST b
+       JOIN USER o ON b.organizer_id = o.u_id
        WHERE b.singer_id = ?
        ORDER BY b.created_at DESC`,
-      [req.user.id]
+      [req.user.u_id]
     );
     res.json(bookings);
   } catch (err) {
@@ -198,21 +185,19 @@ router.get('/bookings/mine', authenticate, requireRole('singer'), async (req, re
 router.put('/booking/:id/respond', authenticate, requireRole('singer'), async (req, res) => {
   try {
     const { status } = req.body;
-    if (!['accepted', 'rejected'].includes(status)) {
+    if (!['accepted', 'rejected'].includes(status))
       return res.status(400).json({ message: 'Status must be accepted or rejected' });
-    }
 
     const [rows] = await db.query(
-      'SELECT * FROM bookings WHERE id = ? AND singer_id = ?',
-      [req.params.id, req.user.id]
+      'SELECT * FROM BOOKING_REQUEST WHERE id = ? AND singer_id = ?',
+      [req.params.id, req.user.u_id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Booking not found' });
 
     await db.query(
-      'UPDATE bookings SET status = ?, responded_at = NOW() WHERE id = ?',
+      'UPDATE BOOKING_REQUEST SET status = ? WHERE id = ?',
       [status, req.params.id]
     );
-
     res.json({ message: `Booking ${status}` });
   } catch (err) {
     res.status(500).json({ message: 'Failed to respond to booking' });
@@ -220,64 +205,39 @@ router.put('/booking/:id/respond', authenticate, requireRole('singer'), async (r
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events/booking/:id/pay
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/booking/:id/pay', authenticate, requireRole('organizer'), async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      'SELECT * FROM bookings WHERE id = ? AND organizer_id = ?',
-      [req.params.id, req.user.id]
-    );
-    if (!rows.length) return res.status(404).json({ message: 'Booking not found' });
-    if (rows[0].status !== 'accepted') {
-      return res.status(400).json({ message: 'Booking must be accepted before payment' });
-    }
-
-    await db.query(
-      'UPDATE bookings SET payment_status = ?, paid_at = NOW() WHERE id = ?',
-      ['paid', req.params.id]
-    );
-
-    res.json({ message: 'Payment recorded successfully' });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to process payment' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events  — Create concert
+// PROTECTED: POST /api/events  — Organizer creates a concert
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const {
-      title, description, venue, event_date, event_time, duration_minutes,
-      banner_image, genre, singer_id,
-      ticket_price_general, ticket_price_vip, ticket_price_student,
-      total_tickets_general, total_tickets_vip, total_tickets_student,
+      title, description, poster, date, time, venue, city, fee,
+      tier1_price, tier1_quantity,
+      tier2_price, tier2_quantity,
+      tier3_price, tier3_quantity,
+      singer_id,
     } = req.body;
 
-    if (!title || !venue || !event_date) {
-      return res.status(400).json({ message: 'title, venue and event_date are required' });
-    }
+    if (!title || !venue || !date)
+      return res.status(400).json({ message: 'title, venue and date are required' });
 
     const [result] = await db.query(
-      `INSERT INTO events (
-        title, description, venue, event_date, event_time, duration_minutes,
-        banner_image, genre, organizer_id, singer_id, status,
-        ticket_price_general, ticket_price_vip, ticket_price_student,
-        total_tickets_general, total_tickets_vip, total_tickets_student,
-        sold_tickets_general, sold_tickets_vip, sold_tickets_student,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, 0, 0, 0, NOW())`,
+      `INSERT INTO EVENT (
+        organizer_id, singer_id, title, description, poster,
+        date, time, venue, city, fee, status,
+        tier1_price, tier1_quantity,
+        tier2_price, tier2_quantity,
+        tier3_price, tier3_quantity
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
       [
-        title, description || '', venue, event_date, event_time || '18:00:00',
-        duration_minutes || 120, banner_image || '', genre || '',
-        req.user.id, singer_id || null,
-        ticket_price_general || 0, ticket_price_vip || 0, ticket_price_student || 0,
-        total_tickets_general || 0, total_tickets_vip || 0, total_tickets_student || 0,
+        req.user.u_id, singer_id || null,
+        title, description || '', poster || '',
+        date, time || '18:00:00', venue, city || 'Dhaka',
+        fee || 0,
+        tier1_price || 0, tier1_quantity || 0,
+        tier2_price || 0, tier2_quantity || 0,
+        tier3_price || 0, tier3_quantity || 0,
       ]
     );
-
     res.status(201).json({ message: 'Concert created', event_id: result.insertId });
   } catch (err) {
     console.error('POST /events error:', err);
@@ -291,16 +251,15 @@ router.post('/', authenticate, requireRole('organizer'), async (req, res) => {
 router.post('/:id/launch', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const [rows] = await db.query(
-      'SELECT * FROM events WHERE id = ? AND organizer_id = ?',
-      [req.params.id, req.user.id]
+      'SELECT * FROM EVENT WHERE event_id = ? AND organizer_id = ?',
+      [req.params.id, req.user.u_id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Event not found' });
 
     await db.query(
-      "UPDATE events SET status = 'upcoming', launched_at = NOW() WHERE id = ?",
+      "UPDATE EVENT SET launch = 1, status = 'approved' WHERE event_id = ?",
       [req.params.id]
     );
-
     res.json({ message: 'Concert is now live!' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to launch concert' });
@@ -316,44 +275,24 @@ router.post('/:id/custom-url', authenticate, requireRole('organizer'), async (re
     if (!custom_url) return res.status(400).json({ message: 'custom_url is required' });
 
     const [existing] = await db.query(
-      'SELECT id FROM events WHERE custom_url = ? AND id != ?',
+      'SELECT event_id FROM EVENT WHERE custom_url = ? AND event_id != ?',
       [custom_url, req.params.id]
     );
     if (existing.length) return res.status(400).json({ message: 'This URL is already taken' });
 
     const [rows] = await db.query(
-      'SELECT * FROM events WHERE id = ? AND organizer_id = ?',
-      [req.params.id, req.user.id]
+      'SELECT * FROM EVENT WHERE event_id = ? AND organizer_id = ?',
+      [req.params.id, req.user.u_id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Event not found' });
 
     await db.query(
-      'UPDATE events SET custom_url = ?, url_status = ? WHERE id = ?',
-      [custom_url, 'pending', req.params.id]
+      "UPDATE EVENT SET custom_url = ?, custom_url_status = 'pending' WHERE event_id = ?",
+      [custom_url, req.params.id]
     );
-
     res.json({ message: 'Custom URL request submitted for admin approval' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to request custom URL' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events/:id/approve-url
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/:id/approve-url', authenticate, requireRole('admin'), async (req, res) => {
-  try {
-    const [rows] = await db.query('SELECT * FROM events WHERE id = ?', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ message: 'Event not found' });
-
-    await db.query(
-      "UPDATE events SET url_status = 'approved' WHERE id = ?",
-      [req.params.id]
-    );
-
-    res.json({ message: 'Custom URL approved' });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to approve URL' });
   }
 });
 
@@ -363,12 +302,12 @@ router.post('/:id/approve-url', authenticate, requireRole('admin'), async (req, 
 router.get('/organizer/mine', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const [events] = await db.query(
-      `SELECT e.*, s.name AS singer_name
-       FROM events e
-       LEFT JOIN users s ON e.singer_id = s.id
+      `SELECT e.*, s.unique_username AS singer_name
+       FROM EVENT e
+       LEFT JOIN USER s ON e.singer_id = s.u_id
        WHERE e.organizer_id = ?
        ORDER BY e.created_at DESC`,
-      [req.user.id]
+      [req.user.u_id]
     );
     res.json(events);
   } catch (err) {
