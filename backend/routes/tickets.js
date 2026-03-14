@@ -1,237 +1,117 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../db');
-const { v4: uuidv4 } = require('uuid');
-const { authenticate, requireRole } = require('../middleware/auth');
-const { sendTicketEmail } = require('../utils/email');
+const db = require('../db');
+const { authenticate } = require('../middleware/auth');
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  POST /api/tickets/buy
-//  Audience buys 1–10 tickets for one event tier
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/buy', authenticate, requireRole('audience'), async (req, res) => {
+// POST /api/tickets/buy
+router.post('/buy', authenticate, async (req, res) => {
+  const { event_id, tier, price, quantity = 1, transaction_id } = req.body;
+  const buyer_id = req.user.u_id;
+
+  if (!event_id || !tier) {
+    return res.status(400).json({ message: 'event_id and tier are required.' });
+  }
+  if (quantity < 1 || quantity > 10) {
+    return res.status(400).json({ message: 'Quantity must be between 1 and 10.' });
+  }
+
   try {
-    let { event_id, tier, quantity, transaction_id } = req.body;
-
-    // FIX #1: validate + default quantity so the loop always runs correctly
-    quantity = parseInt(quantity, 10);
-    if (!quantity || isNaN(quantity) || quantity < 1) quantity = 1;
-    if (quantity > 10)
-      return res.status(400).json({ message: 'Maximum 10 tickets per purchase' });
-
-    if (!event_id || !tier)
-      return res.status(400).json({ message: 'event_id and tier are required' });
-
-    tier = parseInt(tier, 10);
-    if (![1, 2, 3].includes(tier))
-      return res.status(400).json({ message: 'tier must be 1, 2 or 3' });
-
-    // Fetch event
-    const [events] = await pool.query(
-      'SELECT * FROM EVENT WHERE event_id=? AND status=?',
-      [event_id, 'live']
+    // Check how many tickets this user already has for this event
+    const [[{ existing }]] = await db.query(
+      'SELECT COUNT(*) AS existing FROM TICKET WHERE event_id = ? AND buyer_id = ?',
+      [event_id, buyer_id]
     );
-    if (events.length === 0)
-      return res.status(404).json({ message: 'Event not found or not live' });
 
-    const event = events[0];
-    const priceKey = `tier${tier}_price`;
-    const qtyKey   = `tier${tier}_quantity`;
-    const tierPrice    = parseFloat(event[priceKey]);
-    const availableQty = parseInt(event[qtyKey], 10);
-
-    if (!tierPrice || isNaN(tierPrice))
-      return res.status(400).json({ message: `Tier ${tier} is not available for this event` });
-    if (isNaN(availableQty) || availableQty < quantity)
-      return res.status(400).json({ message: `Only ${availableQty || 0} ticket(s) remaining in this tier` });
-
-    const total = tierPrice * quantity;
-
-    // FIX #2: store transaction_id in TICKET_ORDER
-    const [orderResult] = await pool.query(
-      'INSERT INTO TICKET_ORDER (buyer_id, event_id, total_amount, status, transaction_id) VALUES (?,?,?,?,?)',
-      [req.user.u_id, event_id, total, 'paid', transaction_id || null]
-    );
-    const order_id = orderResult.insertId;
-
-    // FIX #1: loop now guaranteed to run `quantity` times (1–10)
-    const tickets = [];
-    for (let i = 0; i < quantity; i++) {
-      const qrData = uuidv4();
-      const ticketCode = `TKT-${event_id}-${tier}-${Date.now()}-${i}`;
-
-      const [tRes] = await pool.query(
-        // FIX #2: also store transaction_id and order_id on each ticket row
-        `INSERT INTO TICKET
-           (event_id, buyer_id, tier, price, qr_code, ticket_code, order_id, transaction_id)
-         VALUES (?,?,?,?,?,?,?,?)`,
-        [event_id, req.user.u_id, tier, tierPrice, qrData, ticketCode, order_id, transaction_id || null]
-      );
-
-      tickets.push({
-        ticket_id:      tRes.insertId,
-        ticket_code:    ticketCode,
-        tier,
-        price:          tierPrice,
-        qr_code:        qrData,
-        transaction_id: transaction_id || null,
+    if (existing + quantity > 10) {
+      return res.status(400).json({
+        message: `You already have ${existing} ticket(s) for this event. You can only hold max 10 per person. You can buy at most ${10 - existing} more.`
       });
     }
 
-    // Deduct quantity from event
-    await pool.query(
-      `UPDATE EVENT SET ${qtyKey} = ${qtyKey} - ? WHERE event_id = ?`,
-      [quantity, event_id]
+    // Check event exists and is bookable
+    const [[event]] = await db.query(
+      'SELECT event_id, status, tier1_price, tier1_quantity, tier2_price, tier2_quantity, tier3_price, tier3_quantity FROM EVENT WHERE event_id = ?',
+      [event_id]
     );
-
-    // Send email (non-blocking — don't fail purchase if email fails)
-    try {
-      const [users] = await pool.query('SELECT email FROM USER WHERE u_id=?', [req.user.u_id]);
-      if (users[0]?.email) {
-        await sendTicketEmail(users[0].email, tickets, event.title);
-      }
-    } catch (emailErr) {
-      console.warn('[tickets] Email send failed (non-fatal):', emailErr.message);
+    if (!event) return res.status(404).json({ message: 'Event not found.' });
+    if (!['approved', 'live'].includes(event.status)) {
+      return res.status(400).json({ message: 'This event is not currently accepting ticket purchases.' });
     }
 
-    res.status(201).json({
-      message: `${quantity} ticket${quantity > 1 ? 's' : ''} purchased successfully!`,
-      tickets,
-      total,
-      order_id,
+    // Check tier capacity (count already-sold tickets for this tier)
+    const tierNum = parseInt(tier);
+    const tierCapacity = event[`tier${tierNum}_quantity`] || 0;
+    const [[{ soldInTier }]] = await db.query(
+      'SELECT COUNT(*) AS soldInTier FROM TICKET WHERE event_id = ? AND tier = ?',
+      [event_id, tierNum]
+    );
+
+    if (soldInTier + quantity > tierCapacity) {
+      return res.status(400).json({
+        message: `Not enough seats in this tier. Only ${tierCapacity - soldInTier} seat(s) remaining.`
+      });
+    }
+
+    // Insert tickets
+    // Insert tickets — generate unique QR code for each
+const ticketValues = Array.from({ length: quantity }, () => {
+  const qr = 'GB-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+  return [event_id, buyer_id, tierNum, event[`tier${tierNum}_price`] || price || 0, qr, 0];
+});
+
+await db.query(
+  'INSERT INTO TICKET (event_id, buyer_id, tier, price, qr_code, used) VALUES ?',
+  [ticketValues]
+);
+
+    res.json({
+      message: `Successfully purchased ${quantity} ticket(s)!`,
+      quantity,
+      tier: tierNum,
+      total_paid: (event[`tier${tierNum}_price`] || price || 0) * quantity,
+      transaction_id,
     });
 
   } catch (err) {
-    console.error('[tickets/buy]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('Ticket buy error:', err);
+    res.status(500).json({ message: 'Failed to purchase tickets.' });
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  GET /api/tickets/mine
-//  Returns all tickets for the logged-in audience user
-// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/tickets/mine  — user's own tickets
 router.get('/mine', authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query(`
-      SELECT
-        t.ticket_id,
-        t.ticket_id   AS id,          -- FIX #3: alias so dashboard key={ticket.id} works
-        t.tier,
-        t.price,
-        t.qr_code,
-        t.ticket_code,
-        t.used,
-        t.used        AS scanned,     -- FIX #4: alias so dashboard ticket.scanned works too
-        t.purchased_at,
-        t.transaction_id,
-        t.order_id,
-        e.title       AS event_title,
-        e.date,
-        e.date        AS event_date,  -- alias for any old code still using event_date
-        e.time,
-        e.venue,
-        e.city,
-        e.poster
+    const [tickets] = await db.query(`
+      SELECT t.ticket_id, t.tier, t.price, t.used, t.purchased_at,
+             e.event_id, e.title, e.date AS event_date, e.time AS event_time,
+             e.venue, e.city, e.poster AS banner_image
       FROM TICKET t
       JOIN EVENT e ON t.event_id = e.event_id
       WHERE t.buyer_id = ?
       ORDER BY t.purchased_at DESC
     `, [req.user.u_id]);
 
-    res.json(rows);
-
-  } catch (err) {
-    console.error('[tickets/mine]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  POST /api/tickets/scan
-//  Organizer scans QR at venue entrance
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/scan', authenticate, requireRole('organizer'), async (req, res) => {
-  try {
-    const { qr_code, device } = req.body;
-
-    if (!qr_code)
-      return res.status(400).json({ message: 'qr_code is required' });
-
-    const [tickets] = await pool.query(
-      `SELECT t.*, e.organizer_id, e.title AS event_title
-       FROM TICKET t
-       JOIN EVENT e ON t.event_id = e.event_id
-       WHERE t.qr_code = ?`,
-      [qr_code]
-    );
-
-    if (tickets.length === 0) {
-      await pool.query(
-        "INSERT INTO QR_SCAN_LOG (ticket_id, device, result) VALUES (0, ?, 'invalid')",
-        [device || 'unknown']
-      ).catch(() => {});
-      return res.status(400).json({ message: 'Invalid QR code', result: 'invalid' });
-    }
-
-    const ticket = tickets[0];
-
-    if (ticket.organizer_id !== req.user.u_id)
-      return res.status(403).json({ message: 'This ticket is not for your event', result: 'unauthorized' });
-
-    if (ticket.used) {
-      await pool.query(
-        'INSERT INTO QR_SCAN_LOG (ticket_id, device, result) VALUES (?,?,?)',
-        [ticket.ticket_id, device || 'unknown', 'duplicate']
-      ).catch(() => {});
-      return res.status(400).json({
-        message: 'Ticket already used',
-        result: 'duplicate',
-        event: ticket.event_title,
+    // Group by event
+    const grouped = {};
+    tickets.forEach(t => {
+      if (!grouped[t.event_id]) {
+        grouped[t.event_id] = {
+          event_id: t.event_id, title: t.title,
+          event_date: t.event_date, event_time: t.event_time,
+          venue: t.venue, city: t.city, banner_image: t.banner_image,
+          tickets: [],
+        };
+      }
+      grouped[t.event_id].tickets.push({
+        ticket_id: t.ticket_id, tier: t.tier,
+        price: t.price, used: t.used, purchased_at: t.purchased_at,
       });
-    }
-
-    // Mark as used
-    await pool.query('UPDATE TICKET SET used=TRUE WHERE ticket_id=?', [ticket.ticket_id]);
-    await pool.query(
-      'INSERT INTO QR_SCAN_LOG (ticket_id, device, result) VALUES (?,?,?)',
-      [ticket.ticket_id, device || 'unknown', 'valid']
-    ).catch(() => {});
-
-    res.json({
-      message: '✅ Valid ticket! Entry granted.',
-      result: 'valid',
-      event: ticket.event_title,
-      tier: ticket.tier,
     });
 
+    res.json({ purchases: Object.values(grouped), total_tickets: tickets.length });
   } catch (err) {
-    console.error('[tickets/scan]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  GET /api/tickets/event/:id
-//  Organizer sees ticket stats for their event
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/event/:id', authenticate, requireRole('organizer'), async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT
-        tier,
-        COUNT(*)       AS total_sold,
-        SUM(used)      AS used_count,
-        SUM(price)     AS revenue
-      FROM TICKET
-      WHERE event_id = ?
-      GROUP BY tier
-      ORDER BY tier
-    `, [req.params.id]);
-    res.json(rows);
-  } catch (err) {
-    console.error('[tickets/event]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch tickets.' });
   }
 });
 
