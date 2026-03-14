@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 import zarinPhoto from '../assets/zarin.jpg';
 import nafishPhoto from '../assets/nafish.jpg';
 
@@ -12,7 +13,6 @@ const nameAnimStyles = `
     30%  { clip-path: inset(0 0 0 0);     transform: translateX(0); }
     100% { clip-path: inset(0 0 0 0);     transform: translateX(0); }
   }
-
   @keyframes typewriter {
     0%   { width: 0; opacity: 1; }
     50%  { width: 100%; opacity: 1; }
@@ -21,120 +21,97 @@ const nameAnimStyles = `
     90%  { width: 0; opacity: 0; }
     100% { width: 0; opacity: 1; }
   }
-
   @keyframes blinkCursor {
     0%, 100% { border-color: transparent; }
     50%       { border-color: currentColor; }
   }
-
   @keyframes namePulse {
     0%, 100% { text-shadow: 0 0 8px currentColor, 0 0 20px currentColor; }
     50%       { text-shadow: 0 0 2px currentColor; }
   }
-
   @keyframes slideUpFade {
     from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-
+  @keyframes cartBounce {
+    0%,100% { transform: scale(1); }
+    30%     { transform: scale(1.4); }
+    60%     { transform: scale(0.9); }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
   .team-name-zarin {
-    display: inline-block;
-    overflow: hidden;
-    white-space: nowrap;
-    width: 0;
-    font-family: 'Orbitron', monospace;
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    color: #ff6b6b;
+    display: inline-block; overflow: hidden; white-space: nowrap; width: 0;
+    font-family: 'Orbitron', monospace; font-size: 15px; font-weight: 700;
+    letter-spacing: 0.12em; color: #ff6b6b;
     text-shadow: 0 0 8px #ff6b6b, 0 0 20px rgba(255,107,107,0.4);
     border-right: 2px solid #ff6b6b;
-    animation:
-      typewriter 3.5s steps(18) 0s infinite,
-      blinkCursor 0.5s step-end infinite,
-      namePulse 3.5s ease-in-out infinite;
+    animation: typewriter 3.5s steps(18) 0s infinite, blinkCursor 0.5s step-end infinite, namePulse 3.5s ease-in-out infinite;
   }
-
   .team-name-nafish {
-    display: inline-block;
-    overflow: hidden;
-    white-space: nowrap;
-    width: 0;
-    font-family: 'Orbitron', monospace;
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    color: #4fc3f7;
+    display: inline-block; overflow: hidden; white-space: nowrap; width: 0;
+    font-family: 'Orbitron', monospace; font-size: 15px; font-weight: 700;
+    letter-spacing: 0.12em; color: #4fc3f7;
     text-shadow: 0 0 8px #4fc3f7, 0 0 20px rgba(79,195,247,0.4);
     border-right: 2px solid #4fc3f7;
-    animation:
-      typewriter 3.5s steps(14) 0.5s infinite,
-      blinkCursor 0.5s step-end 0.5s infinite,
-      namePulse 3.5s ease-in-out 0.5s infinite;
+    animation: typewriter 3.5s steps(14) 0.5s infinite, blinkCursor 0.5s step-end 0.5s infinite, namePulse 3.5s ease-in-out 0.5s infinite;
   }
-
   .team-chip-animated {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
-    padding: 16px 24px;
-    border-radius: 16px;
-    border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.03);
-    animation: slideUpFade 0.6s ease forwards;
-    opacity: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 16px 24px; border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03);
+    animation: slideUpFade 0.6s ease forwards; opacity: 0;
   }
-
   .team-chip-animated:nth-child(1) { animation-delay: 0.1s; }
   .team-chip-animated:nth-child(2) { animation-delay: 0.4s; }
-
-  .photo-wrapper {
-    position: relative;
-    display: inline-block;
-  }
-
+  .photo-wrapper { position: relative; display: inline-block; }
   .photo-ring-zarin {
-    position: absolute;
-    inset: -6px;
-    border-radius: 50%;
+    position: absolute; inset: -6px; border-radius: 50%;
     border: 2px solid transparent;
     background: conic-gradient(#ff6b6b, #ff9a9a, #ff6b6b) border-box;
     -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: destination-out;
-    mask-composite: exclude;
+    -webkit-mask-composite: destination-out; mask-composite: exclude;
     animation: spin 4s linear infinite;
   }
-
   .photo-ring-nafish {
-    position: absolute;
-    inset: -6px;
-    border-radius: 50%;
+    position: absolute; inset: -6px; border-radius: 50%;
     border: 2px solid transparent;
     background: conic-gradient(#4fc3f7, #81d4fa, #4fc3f7) border-box;
     -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: destination-out;
-    mask-composite: exclude;
+    -webkit-mask-composite: destination-out; mask-composite: exclude;
     animation: spin 4s linear infinite reverse;
   }
-
   .role-tag {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    padding: 2px 8px;
-    border-radius: 3px;
-    margin-top: 2px;
+    font-family: 'Share Tech Mono', monospace; font-size: 9px;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 3px; margin-top: 2px;
   }
+  .cart-btn-nav {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .cart-badge-nav {
+    position: absolute; top: -8px; right: -8px;
+    background: #D4A853; color: #000; border-radius: 50%;
+    width: 18px; height: 18px; font-size: 10px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    font-family: monospace;
+  }
+  .cart-badge-nav.bounce { animation: cartBounce 0.4s ease; }
 `;
 
-export default function Navbar() {
+export default function Navbar({ onOpenCart }) {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [clock, setClock] = useState('');
+  const { cartCount }    = useCart();   // ← cartCount from unified CartContext
+  const navigate  = useNavigate();
+  const location  = useLocation();
 
+  const [clock, setClock]       = useState('');
+  const [prevCount, setPrevCount] = useState(0);
+  const [bouncing, setBouncing]  = useState(false);
+
+  // Live clock
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -145,11 +122,16 @@ export default function Navbar() {
     return () => clearInterval(id);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+  // Bounce badge when new item added
+  useEffect(() => {
+    if (cartCount > prevCount) {
+      setBouncing(true);
+      setTimeout(() => setBouncing(false), 400);
+    }
+    setPrevCount(cartCount);
+  }, [cartCount]);
 
+  const handleLogout = () => { logout(); navigate('/login'); };
   const isActive = (path) => location.pathname === path;
 
   const getDashboardPath = () => {
@@ -166,7 +148,6 @@ export default function Navbar() {
   return (
     <>
       <style>{nameAnimStyles}</style>
-
       <nav className="navbar">
         <Link to="/" className="navbar-brand">
           <div className="navbar-logo-icon">🎵</div>
@@ -193,15 +174,40 @@ export default function Navbar() {
           <span className="navbar-clock">{clock}</span>
         </div>
 
-        <div className="navbar-actions" style={{ marginLeft: '20px' }}>
+        <div className="navbar-actions" style={{ marginLeft: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+
+          {/* ── Cart Button ── opens sidebar, not a page ── */}
+          <button
+            onClick={onOpenCart}
+            className="cart-btn-nav"
+            title={cartCount > 0 ? `${cartCount} item(s) in cart` : 'Cart is empty'}
+            style={{
+              background:  cartCount > 0 ? 'rgba(212,168,83,0.12)' : 'rgba(255,255,255,0.04)',
+              border:      cartCount > 0 ? '1px solid rgba(212,168,83,0.35)' : '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '8px', padding: '6px 12px',
+              color:  cartCount > 0 ? '#D4A853' : '#666',
+              fontSize: '18px', transition: 'all 0.2s',
+              fontFamily: 'inherit',
+            }}
+          >
+            🛒
+            {cartCount > 0 && (
+              <span className={`cart-badge-nav${bouncing ? ' bounce' : ''}`}>
+                {cartCount > 99 ? '99+' : cartCount}
+              </span>
+            )}
+          </button>
+
           {user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>
                 <div className="avatar avatar-sm" style={{ width: '28px', height: '28px', fontSize: '11px' }}>
-                  {user.name?.charAt(0).toUpperCase()}
+                  {user.username?.charAt(0).toUpperCase()}
                 </div>
-                <span style={{ color: 'var(--cyan)' }}>{user.name?.split(' ')[0]}</span>
-                <span style={{ padding: '2px 6px', background: 'var(--cyan-dim)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: '3px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--cyan)' }}>{user.role}</span>
+                <span style={{ color: 'var(--cyan)' }}>{user.username}</span>
+                <span style={{ padding: '2px 6px', background: 'var(--cyan-dim)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: '3px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--cyan)' }}>
+                  {user.role}
+                </span>
               </div>
               <button onClick={handleLogout} className="btn btn-ghost btn-sm">Logout</button>
             </div>
@@ -220,55 +226,28 @@ export default function Navbar() {
           <span className="team-label-small">Developed by Team</span>
           <div className="team-label-name">CLEMENTINE</div>
         </div>
-
         <div style={{ width: '1px', height: '60px', background: 'rgba(255,255,255,0.1)' }} />
-
         <div className="team-members" style={{ gap: '32px' }}>
-
-          {/* Kazi Zarin Tasnim */}
           <div className="team-chip-animated">
             <div className="photo-wrapper">
               <div className="photo-ring-zarin" />
-              <img
-                src={zarinPhoto}
-                alt="Kazi Zarin Tasnim"
-                style={{
-                  width: '160px', height: '160px', borderRadius: '50%',
-                  objectFit: 'cover', border: '4px solid #c0392b',
-                  display: 'block', position: 'relative', zIndex: 1
-                }}
-              />
+              <img src={zarinPhoto} alt="Kazi Zarin Tasnim" style={{ width: '160px', height: '160px', borderRadius: '50%', objectFit: 'cover', border: '4px solid #c0392b', display: 'block', position: 'relative', zIndex: 1 }} />
             </div>
             <div style={{ textAlign: 'center' }}>
               <div className="team-name-zarin">Kazi Zarin Tasnim</div>
-              <div className="role-tag" style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)' }}>
-                Developer
-              </div>
+              <div className="role-tag" style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)' }}>Developer</div>
             </div>
           </div>
-
-          {/* Nafish Salehin */}
           <div className="team-chip-animated">
             <div className="photo-wrapper">
               <div className="photo-ring-nafish" />
-              <img
-                src={nafishPhoto}
-                alt="Nafish Salehin"
-                style={{
-                  width: '160px', height: '160px', borderRadius: '50%',
-                  objectFit: 'cover', border: '4px solid #1a6ca8',
-                  display: 'block', position: 'relative', zIndex: 1
-                }}
-              />
+              <img src={nafishPhoto} alt="Nafish Salehin" style={{ width: '160px', height: '160px', borderRadius: '50%', objectFit: 'cover', border: '4px solid #1a6ca8', display: 'block', position: 'relative', zIndex: 1 }} />
             </div>
             <div style={{ textAlign: 'center' }}>
               <div className="team-name-nafish">Nafish Salehin</div>
-              <div className="role-tag" style={{ color: '#4fc3f7', background: 'rgba(79,195,247,0.1)', border: '1px solid rgba(79,195,247,0.3)' }}>
-                Developer
-              </div>
+              <div className="role-tag" style={{ color: '#4fc3f7', background: 'rgba(79,195,247,0.1)', border: '1px solid rgba(79,195,247,0.3)' }}>Developer</div>
             </div>
           </div>
-
         </div>
       </div>
     </>
