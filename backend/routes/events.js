@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
       where.push('e.status = ?');
       params.push(status);
     } else {
-      where.push("e.status IN ('approved', 'live', 'ended')");
+      where.push("e.status IN ('approved', 'live', 'ended') AND e.date >= CURDATE()");
     }
 
     if (search) {
@@ -82,7 +82,7 @@ router.get('/featured', async (req, res) => {
         s.unique_username AS singer_name
       FROM EVENT e
       LEFT JOIN USER s ON e.singer_id = s.u_id
-      WHERE e.status IN ('approved', 'live')
+      WHERE e.status IN ('approved', 'live') AND e.date >= CURDATE()
       ORDER BY e.date ASC
       LIMIT 6`
     );
