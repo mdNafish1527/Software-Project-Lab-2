@@ -57,7 +57,7 @@ router.get('/', async (req, res) => {
       events,
       pagination: {
         total,
-        page: parseInt(page),
+        page:  parseInt(page),
         limit: parseInt(limit),
         pages: Math.ceil(total / limit),
       },
@@ -93,54 +93,64 @@ router.get('/featured', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: GET /api/events/:id  — Concert detail
+// PROTECTED: GET /api/events/organizer/mine
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/:id', async (req, res) => {
+router.get('/organizer/mine', authenticate, requireRole('organizer'), async (req, res) => {
   try {
-    const idOrSlug = req.params.id;
-
-    const [rows] = await db.query(
-      `SELECT
-        e.event_id AS id, e.title, e.description, e.poster AS banner_image,
-        e.date AS event_date, e.time AS event_time, e.venue, e.city,
-        e.fee, e.status, e.custom_url, e.launch,
-        e.tier1_price, e.tier1_quantity,
-        e.tier2_price, e.tier2_quantity,
-        e.tier3_price, e.tier3_quantity,
-        e.created_at,
-        o.unique_username AS organizer_name, o.profile_picture AS organizer_pic,
-        s.unique_username AS singer_name,    s.profile_picture AS singer_pic
-      FROM EVENT e
-      LEFT JOIN USER o ON e.organizer_id = o.u_id
-      LEFT JOIN USER s ON e.singer_id    = s.u_id
-      WHERE e.event_id = ? OR e.custom_url = ?`,
-      [idOrSlug, idOrSlug]
+    const [events] = await db.query(
+      `SELECT e.*, s.unique_username AS singer_name
+       FROM EVENT e
+       LEFT JOIN USER s ON e.singer_id = s.u_id
+       WHERE e.organizer_id = ?
+       ORDER BY e.created_at DESC`,
+      [req.user.u_id]
     );
-
-    if (!rows.length) return res.status(404).json({ message: 'Event not found' });
-
-    // Get remaining tickets per tier
-    const event = rows[0];
-    const [sold] = await db.query(
-      `SELECT tier, COUNT(*) as sold FROM TICKET WHERE event_id = ? GROUP BY tier`,
-      [event.id]
-    );
-    const soldMap = {};
-    sold.forEach(r => soldMap[r.tier] = r.sold);
-
-    event.available_tier1 = Math.max(0, (event.tier1_quantity || 0) - (soldMap[1] || 0));
-    event.available_tier2 = Math.max(0, (event.tier2_quantity || 0) - (soldMap[2] || 0));
-    event.available_tier3 = Math.max(0, (event.tier3_quantity || 0) - (soldMap[3] || 0));
-
-    res.json(event);
+    res.json(events);
   } catch (err) {
-    console.error('GET /events/:id error:', err);
-    res.status(500).json({ message: 'Failed to load event' });
+    res.status(500).json({ message: 'Failed to load your events' });
   }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events/booking  — Organizer books a singer
+// PROTECTED: GET /api/events/organizer/bookings — organizer sees sent requests
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/organizer/bookings', authenticate, requireRole('organizer'), async (req, res) => {
+  try {
+    const [bookings] = await db.query(
+      `SELECT b.*, s.unique_username AS singer_name, s.email AS singer_email, s.profile_picture AS singer_pic
+       FROM BOOKING_REQUEST b
+       JOIN USER s ON b.singer_id = s.u_id
+       WHERE b.organizer_id = ?
+       ORDER BY b.created_at DESC`,
+      [req.user.u_id]
+    );
+    res.json(bookings);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load booking requests' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: GET /api/events/bookings/mine — Singer sees received booking requests
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/bookings/mine', authenticate, requireRole('singer'), async (req, res) => {
+  try {
+    const [bookings] = await db.query(
+      `SELECT b.*, o.unique_username AS organizer_name, o.email AS organizer_email
+       FROM BOOKING_REQUEST b
+       JOIN USER o ON b.organizer_id = o.u_id
+       WHERE b.singer_id = ?
+       ORDER BY b.created_at DESC`,
+      [req.user.u_id]
+    );
+    res.json(bookings);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load bookings' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: POST /api/events/booking — Organizer books a singer
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/booking', authenticate, requireRole('organizer'), async (req, res) => {
   try {
@@ -157,25 +167,6 @@ router.post('/booking', authenticate, requireRole('organizer'), async (req, res)
   } catch (err) {
     console.error('POST /booking error:', err);
     res.status(500).json({ message: 'Failed to send booking request' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/events/bookings/mine  — Singer sees booking requests
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/bookings/mine', authenticate, requireRole('singer'), async (req, res) => {
-  try {
-    const [bookings] = await db.query(
-      `SELECT b.*, o.unique_username AS organizer_name, o.email AS organizer_email
-       FROM BOOKING_REQUEST b
-       JOIN USER o ON b.organizer_id = o.u_id
-       WHERE b.singer_id = ?
-       ORDER BY b.created_at DESC`,
-      [req.user.u_id]
-    );
-    res.json(bookings);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to load bookings' });
   }
 });
 
@@ -205,7 +196,7 @@ router.put('/booking/:id/respond', authenticate, requireRole('singer'), async (r
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: POST /api/events  — Organizer creates a concert
+// PROTECTED: POST /api/events — Organizer creates a concert
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/', authenticate, requireRole('organizer'), async (req, res) => {
   try {
@@ -297,21 +288,123 @@ router.post('/:id/custom-url', authenticate, requireRole('organizer'), async (re
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED: GET /api/events/organizer/mine
+// PROTECTED: GET /api/events/:id/ticket-sales — ticket sales for organizer
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/organizer/mine', authenticate, requireRole('organizer'), async (req, res) => {
+router.get('/:id/ticket-sales', authenticate, requireRole('organizer'), async (req, res) => {
   try {
-    const [events] = await db.query(
-      `SELECT e.*, s.unique_username AS singer_name
-       FROM EVENT e
-       LEFT JOIN USER s ON e.singer_id = s.u_id
-       WHERE e.organizer_id = ?
-       ORDER BY e.created_at DESC`,
-      [req.user.u_id]
+    const [eventRows] = await db.query(
+      `SELECT event_id, title, tier1_price, tier1_quantity,
+              tier2_price, tier2_quantity, tier3_price, tier3_quantity, dynamic_pricing_enable
+       FROM EVENT WHERE event_id = ? AND organizer_id = ?`,
+      [req.params.id, req.user.u_id]
     );
-    res.json(events);
+    if (!eventRows.length) return res.status(404).json({ message: 'Event not found' });
+
+    const event = eventRows[0];
+
+    const [soldRows] = await db.query(
+      `SELECT tier, COUNT(*) AS sold, SUM(price) AS revenue
+       FROM TICKET WHERE event_id = ? GROUP BY tier`,
+      [req.params.id]
+    );
+    const soldMap = {};
+    soldRows.forEach(r => { soldMap[r.tier] = { sold: r.sold, revenue: Number(r.revenue) }; });
+
+    const [recent] = await db.query(
+      `SELECT t.ticket_id, t.tier, t.price, t.purchased_at, t.used,
+              u.unique_username AS buyer
+       FROM TICKET t
+       JOIN USER u ON t.buyer_id = u.u_id
+       WHERE t.event_id = ?
+       ORDER BY t.purchased_at DESC
+       LIMIT 10`,
+      [req.params.id]
+    );
+
+    const tiers = [1, 2, 3].map(n => ({
+      tier:      n,
+      price:     Number(event[`tier${n}_price`]    || 0),
+      capacity:  Number(event[`tier${n}_quantity`] || 0),
+      sold:      soldMap[n]?.sold    || 0,
+      revenue:   soldMap[n]?.revenue || 0,
+      remaining: Math.max(0, (event[`tier${n}_quantity`] || 0) - (soldMap[n]?.sold || 0)),
+    })).filter(t => t.capacity > 0);
+
+    const totalRevenue = tiers.reduce((s, t) => s + t.revenue, 0);
+    const totalSold    = tiers.reduce((s, t) => s + t.sold,    0);
+
+    res.json({ event, tiers, totalRevenue, totalSold, recentPurchases: recent });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to load your events' });
+    console.error('ticket-sales error:', err);
+    res.status(500).json({ message: 'Failed to load ticket sales' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROTECTED: PUT /api/events/:id/dynamic-pricing — toggle Bayesian pricing
+// ─────────────────────────────────────────────────────────────────────────────
+router.put('/:id/dynamic-pricing', authenticate, requireRole('organizer'), async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const [rows] = await db.query(
+      'SELECT event_id FROM EVENT WHERE event_id = ? AND organizer_id = ?',
+      [req.params.id, req.user.u_id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Event not found' });
+
+    await db.query(
+      'UPDATE EVENT SET dynamic_pricing_enable = ? WHERE event_id = ?',
+      [enabled ? 1 : 0, req.params.id]
+    );
+    res.json({ message: `Dynamic pricing ${enabled ? 'enabled' : 'disabled'}`, enabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update dynamic pricing' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC: GET /api/events/:id  — Concert detail (keep LAST — catches all /:id)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:id', async (req, res) => {
+  try {
+    const idOrSlug = req.params.id;
+
+    const [rows] = await db.query(
+      `SELECT
+        e.event_id AS id, e.title, e.description, e.poster AS banner_image,
+        e.date AS event_date, e.time AS event_time, e.venue, e.city,
+        e.fee, e.status, e.custom_url, e.launch,
+        e.tier1_price, e.tier1_quantity,
+        e.tier2_price, e.tier2_quantity,
+        e.tier3_price, e.tier3_quantity,
+        e.created_at,
+        o.unique_username AS organizer_name, o.profile_picture AS organizer_pic,
+        s.unique_username AS singer_name,    s.profile_picture AS singer_pic
+      FROM EVENT e
+      LEFT JOIN USER o ON e.organizer_id = o.u_id
+      LEFT JOIN USER s ON e.singer_id    = s.u_id
+      WHERE e.event_id = ? OR e.custom_url = ?`,
+      [idOrSlug, idOrSlug]
+    );
+
+    if (!rows.length) return res.status(404).json({ message: 'Event not found' });
+
+    const event = rows[0];
+    const [sold] = await db.query(
+      `SELECT tier, COUNT(*) as sold FROM TICKET WHERE event_id = ? GROUP BY tier`,
+      [event.id]
+    );
+    const soldMap = {};
+    sold.forEach(r => soldMap[r.tier] = r.sold);
+
+    event.available_tier1 = Math.max(0, (event.tier1_quantity || 0) - (soldMap[1] || 0));
+    event.available_tier2 = Math.max(0, (event.tier2_quantity || 0) - (soldMap[2] || 0));
+    event.available_tier3 = Math.max(0, (event.tier3_quantity || 0) - (soldMap[3] || 0));
+
+    res.json(event);
+  } catch (err) {
+    console.error('GET /events/:id error:', err);
+    res.status(500).json({ message: 'Failed to load event' });
   }
 });
 
