@@ -220,36 +220,6 @@ export default function Navbar({ onOpenCart }) {
         </div>
       </nav>
 
-      {/* Team Banner */}
-      <div className="team-banner" style={{ padding: '20px 24px' }}>
-        <div className="team-label">
-          <span className="team-label-small">Developed by Team</span>
-          <div className="team-label-name">CLEMENTINE</div>
-        </div>
-        <div style={{ width: '1px', height: '60px', background: 'rgba(255,255,255,0.1)' }} />
-        <div className="team-members" style={{ gap: '32px' }}>
-          <div className="team-chip-animated">
-            <div className="photo-wrapper">
-              <div className="photo-ring-zarin" />
-              <img src={zarinPhoto} alt="Kazi Zarin Tasnim" style={{ width: '160px', height: '160px', borderRadius: '50%', objectFit: 'cover', border: '4px solid #c0392b', display: 'block', position: 'relative', zIndex: 1 }} />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div className="team-name-zarin">Kazi Zarin Tasnim</div>
-              <div className="role-tag" style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)' }}>Developer</div>
-            </div>
-          </div>
-          <div className="team-chip-animated">
-            <div className="photo-wrapper">
-              <div className="photo-ring-nafish" />
-              <img src={nafishPhoto} alt="Nafish Salehin" style={{ width: '160px', height: '160px', borderRadius: '50%', objectFit: 'cover', border: '4px solid #1a6ca8', display: 'block', position: 'relative', zIndex: 1 }} />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div className="team-name-nafish">Nafish Salehin</div>
-              <div className="role-tag" style={{ color: '#4fc3f7', background: 'rgba(79,195,247,0.1)', border: '1px solid rgba(79,195,247,0.3)' }}>Developer</div>
-            </div>
-          </div>
-        </div>
-      </div>
     </>
   );
 }
