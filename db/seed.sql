@@ -144,7 +144,7 @@ INSERT INTO ITEM (seller_id, event_id, name, type, description, price, stock_qua
  'Clothing',
  'Official IIT-DU hoodie from 2024 batch. Navy blue with IIT-DU logo. Size L. Worn twice, excellent condition.',
  650.00, 3,
- 'https://images.unsplash.com/photo-1556821840-3a63f15732ce?w=400&auto=format&fit=crop'),
+ 'https://images.unsplash.com/photo-1601063476271-a159c71ab0b3?q=80&w=652&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'),
 
 (4, NULL, 'DU Cultural Week T-Shirt Collection (3 pcs)',
  'Clothing',
