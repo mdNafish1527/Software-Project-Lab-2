@@ -27,7 +27,7 @@ export default function SingerDashboard() {
         booking_fee: me.data?.booking_fee || '',
         available: me.data?.available !== false
       });
-      const myItems = (mkt.data || []).filter(i => i.seller_id === user?.id);
+      const myItems = (mkt.data?.items || []).filter(i => i.seller_id === user?.u_id || i.seller_id === user?.id);
       setItems(myItems);
     }).finally(() => setLoading(false));
   }, [user?.id]);
