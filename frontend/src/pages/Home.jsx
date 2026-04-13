@@ -146,7 +146,7 @@ export default function Home() {
             </div>
             <div style={{ background:'rgba(0,212,255,0.05)',border:'1px solid rgba(0,212,255,0.2)',borderRadius:'var(--radius-lg)',padding:'24px',minWidth:'220px' }}>
               <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',letterSpacing:'0.2em',textTransform:'uppercase',color:'var(--text-dim)',marginBottom:'14px' }}>IIT — DU At a Glance</div>
-              {[{ label:'Department',value:'IIT, DU' },{ label:'Location',value:'Nilkhet, Dhaka' },{ label:'Founded',value:'2001' },{ label:'Program',value:'Software Project Lab II' },{ label:'Team',value:'CLEMENTINE' }].map(row => (
+              {[{ label:'Department',value:'IIT, DU' },{ label:'Location',value:'Nilkhet, Dhaka' },{ label:'Target',value:'4.00' },{ label:'Program',value:'Software Project Lab II' },{ label:'Supervisor',value:'Dr. Naushin Nower' }].map(row => (
                 <div key={row.label} style={{ display:'flex',justifyContent:'space-between',gap:'12px',padding:'7px 0',borderBottom:'1px solid rgba(255,255,255,0.05)',fontFamily:'var(--text-mono)',fontSize:'11px' }}>
                   <span style={{ color:'var(--text-dim)',letterSpacing:'0.08em' }}>{row.label}</span>
                   <span style={{ color:'var(--cyan)' }}>{row.value}</span>
