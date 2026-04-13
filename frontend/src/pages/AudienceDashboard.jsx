@@ -30,18 +30,19 @@ function QRCode({ value, size = 100 }) {
 
 function TicketCard({ ticket }) {
   const [expanded, setExpanded] = useState(false);
-  const isUsed = ticket.used || ticket.scanned;
+  const isUsed  = ticket.used || ticket.scanned;
   const qrValue = ticket.qr_code || ticket.ticket_code || `TKT-${ticket.ticket_id || ticket.id}`;
 
   return (
     <div style={{
-      background: 'var(--bg-card)',
-      border: isUsed ? '1px solid rgba(212,168,83,0.35)' : '1px solid rgba(0,212,255,0.25)',
-      borderLeft: isUsed ? '3px solid var(--gold)' : '3px solid var(--cyan)',
+      background:   'var(--bg-card)',
+      border:       isUsed ? '1px solid rgba(212,168,83,0.35)' : '1px solid rgba(0,212,255,0.25)',
+      borderLeft:   isUsed ? '3px solid var(--gold)'           : '3px solid var(--cyan)',
       borderRadius: 'var(--radius-sm)',
-      overflow: 'hidden',
+      overflow:     'hidden',
     }}>
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
+
         {/* Left: info */}
         <div style={{ flex: 1, padding: '16px 18px' }}>
           <div style={{ fontFamily: 'var(--text-display)', fontSize: '15px', color: 'var(--text-primary)', marginBottom: '8px' }}>
@@ -140,13 +141,14 @@ export default function AudienceDashboard() {
         return { data: [] };
       }),
     ]).then(([t, o, c]) => {
-      // tickets/mine returns { purchases: [{ title, event_date, venue, tickets: [...] }] }
-      // flatten each group into individual ticket rows with event info merged in
+      // /tickets/mine returns:
+      // { purchases: [{ event_id, event_title, event_date, event_time, venue, city, banner_image, tickets: [...] }] }
+      // Flatten each group into individual ticket rows with event info merged in.
       const purchases = t.data?.purchases || [];
       const ticketData = purchases.flatMap(group =>
         (group.tickets || []).map(ticket => ({
           ...ticket,
-          event_title:  group.title,
+          event_title:  group.event_title,   // ✅ FIX: was group.title (undefined)
           event_date:   group.event_date,
           event_time:   group.event_time,
           venue:        group.venue,
