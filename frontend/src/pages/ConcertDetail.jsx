@@ -8,9 +8,7 @@ export default function ConcertDetail({ onOpenCart }) {
   const { id }   = useParams();
   const { user } = useAuth();
 
-  // ── new CartContext API ──────────────────────────────────────────────────
   const { addTicket, cartItems, cartTotal } = useCart();
-  // ────────────────────────────────────────────────────────────────────────
 
   const [event, setEvent]         = useState(null);
   const [tiers, setTiers]         = useState([]);
@@ -27,9 +25,13 @@ export default function ConcertDetail({ onOpenCart }) {
         const ev = res.data?.event || res.data;
         setEvent(ev);
         const built = [];
-        if (ev?.tier1_quantity > 0) built.push({ id: 1, tierNum: 1, label: 'Tier 1', name: 'Tier 1 — General', price: Number(ev.tier1_price || 0), capacity: ev.tier1_quantity });
-        if (ev?.tier2_quantity > 0) built.push({ id: 2, tierNum: 2, label: 'Tier 2', name: 'Tier 2 — VIP',     price: Number(ev.tier2_price || 0), capacity: ev.tier2_quantity });
-        if (ev?.tier3_quantity > 0) built.push({ id: 3, tierNum: 3, label: 'Tier 3', name: 'Tier 3 — Student', price: Number(ev.tier3_price || 0), capacity: ev.tier3_quantity });
+        // FIX: skip any tier with price === 0 — free tickets not allowed
+        if (ev?.tier1_quantity > 0 && Number(ev.tier1_price) > 0)
+          built.push({ id: 1, tierNum: 1, label: 'Tier 1', name: 'Tier 1 — General', price: Number(ev.tier1_price), capacity: ev.tier1_quantity });
+        if (ev?.tier2_quantity > 0 && Number(ev.tier2_price) > 0)
+          built.push({ id: 2, tierNum: 2, label: 'Tier 2', name: 'Tier 2 — VIP',     price: Number(ev.tier2_price), capacity: ev.tier2_quantity });
+        if (ev?.tier3_quantity > 0 && Number(ev.tier3_price) > 0)
+          built.push({ id: 3, tierNum: 3, label: 'Tier 3', name: 'Tier 3 — Student', price: Number(ev.tier3_price), capacity: ev.tier3_quantity });
         setTiers(built);
       })
       .catch(() => {})
@@ -41,7 +43,6 @@ export default function ConcertDetail({ onOpenCart }) {
     setTimeout(() => setAlert(null), 5000);
   };
 
-  // ── How many of this event's tickets are in cart ─────────────────────────
   const cartTicketCount = (tierNum) => {
     const cartId = `ticket-${id}-Tier ${tierNum}`;
     const item   = (cartItems || []).find(i => i.cartId === cartId);
@@ -56,16 +57,15 @@ export default function ConcertDetail({ onOpenCart }) {
     .filter(i => i.type === 'ticket' && String(i.event_id) === String(id))
     .reduce((s, i) => s + Number(i.price) * i.quantity, 0);
 
-  // ── Add ticket to cart using new API ─────────────────────────────────────
   const handleAddToCart = (tier) => {
     if (!user) { showAlert('error', 'Please login to buy tickets'); return; }
     const qty = tierQty[tier.tierNum] || 1;
     addTicket(
       {
-        id:          Number(id),
-        title:       event.title,
-        venue:       event.venue,
-        event_date:  event.date || event.event_date,
+        id:           Number(id),
+        title:        event.title,
+        venue:        event.venue,
+        event_date:   event.date || event.event_date,
         banner_image: event.poster || event.banner_image,
       },
       { label: tier.label, price: tier.price },
@@ -106,7 +106,7 @@ export default function ConcertDetail({ onOpenCart }) {
         )}
         <div style={{ position: 'absolute', top: 0, right: 0, width: '300px', height: '300px', background: 'radial-gradient(circle,rgba(0,212,255,0.08) 0%,transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative' }}>
-          <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.2em', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '10px' }}>🎵 Live Concert</div>
+          <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.2em', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '10px' }}>🎵 Concert</div>
           <h1 style={{ fontFamily: 'var(--text-display)', fontSize: 'clamp(20px,4vw,32px)', color: 'var(--cyan)', letterSpacing: '0.06em', textShadow: 'var(--cyan-glow)', marginBottom: '14px' }}>{event.title}</h1>
           <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
             {[
@@ -165,8 +165,9 @@ export default function ConcertDetail({ onOpenCart }) {
                         {tiers.map(tier => (
                           <div key={tier.id} style={{ background: 'var(--bg-secondary)', border: 'var(--border-dim)', borderRadius: 'var(--radius-sm)', padding: '16px 20px', minWidth: '150px' }}>
                             <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', marginBottom: '4px', letterSpacing: '0.1em' }}>{tier.name}</div>
-                            <div style={{ fontFamily: 'var(--text-display)', fontSize: '22px', color: tier.price === 0 ? '#00ff64' : 'var(--gold)', textShadow: 'var(--gold-glow)' }}>
-                              {tier.price === 0 ? 'FREE' : `৳${tier.price.toLocaleString()}`}
+                            {/* FIX: always show price — free tiers are excluded at fetch time */}
+                            <div style={{ fontFamily: 'var(--text-display)', fontSize: '22px', color: 'var(--gold)', textShadow: 'var(--gold-glow)' }}>
+                              ৳{tier.price.toLocaleString()}
                             </div>
                             <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px' }}>{tier.capacity?.toLocaleString()} seats</div>
                             {cartTicketCount(tier.tierNum) > 0 && (
@@ -226,8 +227,9 @@ export default function ConcertDetail({ onOpenCart }) {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                           <div>
                             <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{tier.name}</div>
+                            {/* FIX: always show price — free tiers filtered out at load time */}
                             <div style={{ fontFamily: 'var(--text-display)', fontSize: '20px', color: 'var(--gold)' }}>
-                              {tier.price === 0 ? 'FREE' : `৳${tier.price.toLocaleString()}`}
+                              ৳{tier.price.toLocaleString()}
                             </div>
                           </div>
                           {inCart > 0 && (
