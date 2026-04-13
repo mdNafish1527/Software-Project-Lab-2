@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 const METHODS = [
   {
@@ -47,7 +47,6 @@ const METHODS = [
   },
 ];
 
-// Determine text color on colored button backgrounds
 function btnTextColor(color) {
   const dark = ['#E2136E', '#8B2FC9', '#F26522'];
   return dark.includes(color) ? '#fff' : '#000';
@@ -69,6 +68,13 @@ export default function PaymentGateway({ amount, itemDescription, onSuccess, onC
   const [txId, setTxId]                 = useState('');
   const [error, setError]               = useState('');
   const [loading, setLoading]           = useState(false);
+
+  // ✅ FIX: ref guard — ensures onSuccess is called exactly once even if
+  // React StrictMode mounts this component twice and registers two setTimeouts.
+  const firedRef  = useRef(false);
+  // ✅ FIX: store the timer id so we can cancel the StrictMode ghost timer
+  // before it fires.
+  const timerRef  = useRef(null);
 
   const selectedMethod = METHODS.find(m => m.id === method);
 
@@ -116,15 +122,28 @@ export default function PaymentGateway({ amount, itemDescription, onSuccess, onC
     setError('');
     if (!otp) return setError('Enter the OTP sent to your number.');
     if (otp !== generatedOtp) return setError('Incorrect OTP. Please try again.');
+
     setLoading(true);
     setStep('processing');
-    setTimeout(() => {
+
+    // ✅ FIX: clear any previously scheduled timer before creating a new one.
+    // StrictMode tears down and remounts effects/components, which can leave
+    // a ghost timer from the first mount still in the queue. Clearing it here
+    // guarantees only one timer is ever pending at a time.
+    if (timerRef.current) clearTimeout(timerRef.current);
+
+    timerRef.current = setTimeout(() => {
+      // ✅ FIX: hard gate — if this callback has already run once (e.g. a
+      // second timer survived from StrictMode's double-mount), do nothing.
+      if (firedRef.current) return;
+
       const success = Math.random() > 0.1; // 90% success simulation
       if (success) {
         const tx = randomTx(method);
         setTxId(tx);
         setStep('success');
-        onSuccess && onSuccess(tx);
+        firedRef.current = true;          // ✅ mark as fired BEFORE calling onSuccess
+        onSuccess && onSuccess(tx);       // called exactly once
       } else {
         setStep('failed');
       }
@@ -134,11 +153,18 @@ export default function PaymentGateway({ amount, itemDescription, onSuccess, onC
 
   const handleFreeConfirm = () => {
     setStep('processing');
-    setTimeout(() => {
+
+    // ✅ Same double-fire guard as handleOtpVerify
+    if (timerRef.current) clearTimeout(timerRef.current);
+
+    timerRef.current = setTimeout(() => {
+      if (firedRef.current) return;
+
       const tx = randomTx('FREE');
       setTxId(tx);
       setStep('success');
-      onSuccess && onSuccess(tx);
+      firedRef.current = true;            // ✅ mark before calling
+      onSuccess && onSuccess(tx);         // called exactly once
     }, 1500);
   };
 
