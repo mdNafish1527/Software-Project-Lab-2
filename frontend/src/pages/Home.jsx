@@ -75,6 +75,15 @@ const nameAnimStyles = `
   }
 `;
 
+// Status badge config — matches Concerts.jsx
+const STATUS_BADGE = {
+  live:      { label: '🔴 Live Now',  cls: 'badge-red'   },
+  approved:  { label: '🟢 Upcoming',  cls: 'badge-green' },
+  ended:     { label: '✅ Ended',     cls: 'badge-gold'  },
+  cancelled: { label: '❌ Cancelled', cls: 'badge-red'   },
+  pending:   { label: '⏳ Pending',   cls: 'badge-gold'  },
+};
+
 const DEFAULT_CONCERTS = [
   { id:'default-1', title:'IIT-DU Tech Fest 2025 — Mega Night', subtitle:'Annual Tech Fest Concert — Grand Finale', venue:'টিএসসি চত্বর, ঢাকা বিশ্ববিদ্যালয়', venue_en:'TSC Ground, University of Dhaka', event_date:'2026-12-20', singer_name:'Aurthohin', genre:'Rock / Metal', price:'৳200', tag:'IIT-DU', tag_color:'badge-cyan', emoji:'⚡', highlight:true },
   { id:'default-2', title:'University of Dhaka 104th Founding Day', subtitle:'১০৪তম প্রতিষ্ঠাবার্ষিকী সাংস্কৃতিক সন্ধ্যা', venue:'বটমূল, ঢাকা বিশ্ববিদ্যালয়', venue_en:'Botomul Ground, University of Dhaka', event_date:'2026-07-01', singer_name:'Shironamhin', genre:'Classical / Cultural', price:'৳150', tag:'DU', tag_color:'badge-gold', emoji:'🏛️', highlight:false },
@@ -93,16 +102,30 @@ const STATS = [
 
 export default function Home() {
   const { user } = useAuth();
-  const [liveEvents, setLiveEvents] = useState([]);
+  // Separate live events from upcoming for home page sections
+  const [liveEvents,     setLiveEvents]     = useState([]);
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
 
   useEffect(() => {
-    api.get('/events?limit=6')
+    // Fetch live events (status=live)
+    api.get('/events?status=live&limit=3')
       .then(res => {
         const data = res.data?.events || res.data || [];
-        setLiveEvents(Array.isArray(data) ? data.slice(0, 6) : []);
+        setLiveEvents(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {});
+
+    // Fetch upcoming approved events (status=approved)
+    api.get('/events?status=approved&limit=6')
+      .then(res => {
+        const data = res.data?.events || res.data || [];
+        setUpcomingEvents(Array.isArray(data) ? data : []);
       })
       .catch(() => {});
   }, []);
+
+  // All db events to display = live first, then upcoming
+  const dbEvents = [...liveEvents, ...upcomingEvents].slice(0, 6);
 
   return (
     <div className="page-wrapper">
@@ -156,47 +179,75 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Live DB Concerts */}
+        {/* ── Live Now strip (only if any live events exist) ── */}
         {liveEvents.length > 0 && (
+          <div style={{ background:'rgba(255,68,68,0.06)', border:'1px solid rgba(255,68,68,0.25)', borderLeft:'4px solid #ff4444', borderRadius:'var(--radius-lg)', padding:'14px 20px', marginBottom:'20px', display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap' }}>
+            <span style={{ fontFamily:'var(--text-mono)', fontSize:'11px', color:'#ff4444', fontWeight:'800', letterSpacing:'0.12em', animation:'pulse 1.5s infinite' }}>🔴 LIVE NOW</span>
+            <div style={{ display:'flex', gap:'10px', flexWrap:'wrap' }}>
+              {liveEvents.map(ev => (
+                <Link key={ev.id} to={`/concerts/${ev.custom_url || ev.id}`} style={{ textDecoration:'none', fontFamily:'var(--text-body)', fontSize:'13px', color:'#EEF2FF', background:'rgba(255,68,68,0.1)', border:'1px solid rgba(255,68,68,0.2)', borderRadius:'6px', padding:'4px 12px' }}>
+                  🎵 {ev.title}
+                </Link>
+              ))}
+            </div>
+            <Link to="/concerts?status=live" style={{ marginLeft:'auto', fontFamily:'var(--text-mono)', fontSize:'10px', color:'#ff4444', textDecoration:'none', letterSpacing:'0.1em' }}>VIEW ALL →</Link>
+          </div>
+        )}
+
+        {/* ── DB events (live + upcoming) ── */}
+        {dbEvents.length > 0 && (
           <>
             <div style={{ marginBottom:'10px' }} className="flex-between">
               <div>
                 <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',letterSpacing:'0.2em',textTransform:'uppercase',color:'var(--text-dim)',marginBottom:'4px' }}>ঢাকা বিশ্ববিদ্যালয় · IIT-DU · TSC · শহীদ মিনার</div>
-                <h2 style={{ fontFamily:'var(--text-display)',fontSize:'18px',color:'var(--text-primary)',letterSpacing:'0.05em' }}>UPCOMING CONCERTS</h2>
+                <h2 style={{ fontFamily:'var(--text-display)',fontSize:'18px',color:'var(--text-primary)',letterSpacing:'0.05em' }}>
+                  {liveEvents.length > 0 ? 'LIVE & UPCOMING CONCERTS' : 'UPCOMING CONCERTS'}
+                </h2>
               </div>
               <Link to="/concerts" className="btn btn-ghost btn-sm">View All →</Link>
             </div>
             <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:'16px',marginBottom:'40px' }}>
-              {liveEvents.map(ev => (
-                <Link key={ev.id} to={`/concerts/${ev.custom_url || ev.id}`} style={{ textDecoration:'none' }}>
-                  <div className="event-card" onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-4px)';e.currentTarget.style.boxShadow='0 12px 40px rgba(0,212,255,0.12)'}} onMouseLeave={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}} style={{ transition:'all 0.2s', height:'100%' }}>
-                    <div style={{ height:'140px',overflow:'hidden',position:'relative',background:'linear-gradient(135deg,#080f1e 0%,#0f1e35 100%)' }}>
-                      {ev.banner_image
-                        ? <img src={ev.banner_image} alt={ev.title} style={{ width:'100%',height:'100%',objectFit:'cover' }} />
-                        : <div style={{ display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:'48px' }}>🎵</div>
-                      }
-                      <div style={{ position:'absolute',inset:0,background:'linear-gradient(to top,rgba(8,15,30,0.85) 0%,transparent 60%)' }} />
-                      <div style={{ position:'absolute',top:'10px',right:'10px' }}>
-                        <span className="badge badge-green">UPCOMING</span>
+              {dbEvents.map(ev => {
+                const badge = STATUS_BADGE[ev.status] || STATUS_BADGE.approved;
+                return (
+                  <Link key={ev.id} to={`/concerts/${ev.custom_url || ev.id}`} style={{ textDecoration:'none' }}>
+                    <div
+                      className="event-card"
+                      onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-4px)';e.currentTarget.style.boxShadow='0 12px 40px rgba(0,212,255,0.12)'}}
+                      onMouseLeave={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}
+                      style={{ transition:'all 0.2s', height:'100%', border: ev.status === 'live' ? '1px solid rgba(255,68,68,0.35)' : undefined }}
+                    >
+                      <div style={{ height:'140px',overflow:'hidden',position:'relative',background:'linear-gradient(135deg,#080f1e 0%,#0f1e35 100%)' }}>
+                        {ev.banner_image
+                          ? <img src={ev.banner_image} alt={ev.title} style={{ width:'100%',height:'100%',objectFit:'cover' }} />
+                          : <div style={{ display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:'48px' }}>🎵</div>
+                        }
+                        <div style={{ position:'absolute',inset:0,background:'linear-gradient(to top,rgba(8,15,30,0.85) 0%,transparent 60%)' }} />
+                        {/* Real status badge — not hardcoded */}
+                        <div style={{ position:'absolute',top:'10px',right:'10px' }}>
+                          <span className={`badge ${badge.cls}`}>{badge.label}</span>
+                        </div>
+                      </div>
+                      <div className="event-card-body">
+                        <div className="event-card-title">{ev.title}</div>
+                        <div className="event-card-meta">
+                          <span>📍 {ev.venue || '—'}</span>
+                          <span>📅 {ev.event_date ? new Date(ev.event_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</span>
+                          {ev.singer_name && <span>🎤 {ev.singer_name}</span>}
+                        </div>
+                        <div className="flex-between">
+                          <span className="badge badge-gold">
+                            {ev.tier1_price === 0 ? 'FREE' : ev.tier1_price ? `from ৳${ev.tier1_price}` : 'See Details'}
+                          </span>
+                          <span style={{ fontFamily:'var(--text-mono)',fontSize:'11px',color: ev.status === 'live' ? '#ff4444' : 'var(--cyan)' }}>
+                            {ev.status === 'live' ? '🔴 LIVE →' : 'VIEW →'}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div className="event-card-body">
-                      <div className="event-card-title">{ev.title}</div>
-                      <div className="event-card-meta">
-                        <span>📍 {ev.venue || '—'}</span>
-                        <span>📅 {ev.event_date ? new Date(ev.event_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</span>
-                        {ev.singer_name && <span>🎤 {ev.singer_name}</span>}
-                      </div>
-                      <div className="flex-between">
-                        <span className="badge badge-gold">
-                          {ev.tier1_price === 0 ? 'FREE' : ev.tier1_price ? `৳${ev.tier1_price}` : 'See Details'}
-                        </span>
-                        <span style={{ fontFamily:'var(--text-mono)',fontSize:'11px',color:'var(--cyan)' }}>VIEW →</span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           </>
         )}
@@ -219,11 +270,11 @@ export default function Home() {
                   {ev.emoji}
                   <div style={{ position:'absolute',top:'10px',right:'10px',display:'flex',gap:'6px' }}>
                     <span className={`badge ${ev.tag_color}`}>{ev.tag}</span>
-                    {ev.highlight && <span className="badge badge-cyan" style={{ animation:'pulse 2s infinite' }}>★ FEATURED</span>}
+                    {ev.highlight && <span className="badge badge-cyan">★ FEATURED</span>}
                   </div>
                 </div>
                 <div style={{ padding:'16px' }}>
-                  <div style={{ fontFamily:'var(--text-display)',fontSize:'14px',color:ev.highlight?'var(--cyan)':'var(--text-primary)',letterSpacing:'0.04em',marginBottom:'4px',textShadow:ev.highlight?'var(--cyan-glow)':'none' }}>{ev.title}</div>
+                  <div style={{ fontFamily:'var(--text-display)',fontSize:'14px',color:ev.highlight?'var(--cyan)':'var(--text-primary)',letterSpacing:'0.04em',marginBottom:'4px' }}>{ev.title}</div>
                   <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',marginBottom:'10px',letterSpacing:'0.05em' }}>{ev.subtitle}</div>
                   <div style={{ display:'flex',flexDirection:'column',gap:'4px',fontFamily:'var(--text-mono)',fontSize:'11px',color:'var(--text-secondary)',marginBottom:'12px' }}>
                     <span>📍 {ev.venue}</span>
@@ -248,12 +299,12 @@ export default function Home() {
           <h2 style={{ fontFamily:'var(--text-display)',fontSize:'18px',color:'var(--text-primary)',letterSpacing:'0.05em',marginBottom:'20px' }}>PLATFORM FEATURES</h2>
           <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px' }}>
             {[
-              { icon:'🎫',title:'TICKET MANAGEMENT', desc:'Buy tickets online and receive QR codes via email for seamless venue entry',color:'cyan' },
-              { icon:'🎤',title:'ARTIST BOOKING',    desc:'Organizers can browse and directly book verified Bangladeshi singers for events',color:'gold' },
-              { icon:'🛒',title:'MERCHANDISE STORE', desc:'Artists and organizers can list and sell merchandise with smart cart system',color:'green' },
+              { icon:'🎫',title:'TICKET MANAGEMENT', desc:'Buy tickets online and receive QR codes for seamless venue entry',color:'cyan' },
+              { icon:'🎤',title:'ARTIST BOOKING',    desc:'Organizers can browse and directly book verified Bangladeshi singers',color:'gold' },
+              { icon:'🛒',title:'MERCHANDISE STORE', desc:'Artists and organizers can list and sell merchandise with smart cart',color:'green' },
               { icon:'📊',title:'LIVE DASHBOARDS',   desc:'Role-specific dashboards for audience, artists, organizers and admins',color:'cyan' },
-              { icon:'🔐',title:'SECURE AUTH',        desc:'JWT-based authentication with email OTP verification for all users',color:'gold' },
-              { icon:'📱',title:'QR SCANNER',         desc:'Real-time QR code scanning for organizers to validate event entry tickets',color:'green' },
+              { icon:'🔐',title:'SECURE AUTH',        desc:'JWT-based authentication with role-based access control',color:'gold' },
+              { icon:'📱',title:'QR SCANNER',         desc:'Real-time QR scanning for organizers to validate event entry tickets',color:'green' },
             ].map(f => (
               <div key={f.title} style={{ background:'var(--bg-card)',border:'var(--border-dim)',borderLeft:`2px solid var(--${f.color})`,borderRadius:'var(--radius-lg)',padding:'20px',transition:'transform 0.2s' }}
                 onMouseEnter={e=>e.currentTarget.style.transform='translateY(-2px)'}
