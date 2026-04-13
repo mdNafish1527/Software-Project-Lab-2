@@ -207,30 +207,29 @@ npm start
 ### Organizer
 1. Register → verify OTP → wait for admin approval → login → browse singers → send booking request → wait for acceptance → pay fee → create concert → set ticket tiers → launch event → scan QR codes at venue
 
-### Admin
-1. Created via invitation from existing admin → login → approve/reject pending accounts → manage events → view complaints → invite new admins
+
 
 ---
 
 ## Features Implemented
-- ✅ Role-based registration (Audience / Singer / Organizer)
-- ✅ Email OTP verification with 5-minute expiry
-- ✅ Admin account via one-time invitation link
-- ✅ Pending status for Singer/Organizer until admin approves
-- ✅ JWT-based login (multi-device allowed)
-- ✅ Password reset via OTP
-- ✅ Password change (current password required)
-- ✅ Singer booking workflow (request → accept → pay → create event)
-- ✅ Concert creation with up to 3 ticket tiers
-- ✅ Dynamic pricing flag
-- ✅ Custom URL request with admin approval
-- ✅ Ticket purchase (max 10 per event) with QR code
-- ✅ QR code scanning + validation (valid / invalid / duplicate)
-- ✅ Complaint submission with evidence
-- ✅ Marketplace with browsing history-based recommendations
-- ✅ Shopping cart with shipping details
-- ✅ Role-specific dashboards
-- ✅ Developer credits in footer
+-  Role-based registration (Audience / Singer / Organizer)
+-  Email OTP verification with 5-minute expiry
+-  Admin account via one-time invitation link
+-  Pending status for Singer/Organizer until admin approves
+-  JWT-based login (multi-device allowed)
+-  Password reset via OTP
+-  Password change (current password required)
+-  Singer booking workflow (request → accept → pay → create event)
+-  Concert creation with up to 3 ticket tiers
+-  Dynamic pricing flag
+-  Custom URL request with admin approval
+-  Ticket purchase (max 10 per event) with QR code
+-  QR code scanning + validation (valid / invalid / duplicate)
+-  Complaint submission with evidence
+-  Marketplace with browsing history-based recommendations
+-  Shopping cart with shipping details
+-  Role-specific dashboards
+-  Developer credits in footer
 
 ---
 
