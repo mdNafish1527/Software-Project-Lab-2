@@ -1,110 +1,164 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext';
 
-// ─── Cart item shapes ──────────────────────────────────────────────────────────
-// Ticket:  { type:'ticket',  cartId:'ticket-{eventId}-{tierLabel}',
-//            event_id, event_title, venue, event_date,
-//            tier(number), tier_label, price, quantity, banner_image }
-// Product: { type:'product', cartId:'product-{itemId}',
-//            item_id, title, price, quantity, stock, image_url, seller_name }
+// ─── Tier config (inlined — no separate file needed) ─────────
+const TIER_LABELS = { 1: 'Standing', 2: 'Chair', 3: 'Sofa' };
+const getTierLabel = (tier) => TIER_LABELS[tier] || `Tier ${tier}`;
 
-const CartContext = createContext();
+// Map label string back to tier number
+const labelToTierNum = (label = '') => {
+  const key = label.toLowerCase().trim();
+  if (key === 'standing') return 1;
+  if (key === 'chair')    return 2;
+  if (key === 'sofa')     return 3;
+  // fallback: parse number from e.g. "Tier 1"
+  const n = parseInt(label.replace(/\D/g, ''));
+  return [1, 2, 3].includes(n) ? n : 1;
+};
+
+const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-  const [cartItems, setCartItems] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('gb_cart_v2') || '[]'); }
-    catch { return []; }
-  });
+  const { user } = useAuth();
+  const [cartItems, setCartItems] = useState([]);
 
+  // Clear cart when user logs out
   useEffect(() => {
-    localStorage.setItem('gb_cart_v2', JSON.stringify(cartItems));
-  }, [cartItems]);
+    if (!user) setCartItems([]);
+  }, [user]);
 
-  // ── Add ticket ─────────────────────────────────────────────────────────────
-  const addTicket = (event, tier, quantity = 1) => {
-    const cartId = `ticket-${event.id}-${tier.label}`;
+  // ── addTicketToCart ─────────────────────────────────────────
+  const addTicketToCart = useCallback((item) => {
+    const cartId = `ticket-${item.event_id}-${item.tier}`;
     setCartItems(prev => {
       const existing = prev.find(i => i.cartId === cartId);
       if (existing) {
-        const newQty = Math.min(existing.quantity + quantity, 10);
-        return prev.map(i => i.cartId === cartId ? { ...i, quantity: newQty } : i);
+        return prev.map(i =>
+          i.cartId === cartId
+            ? { ...i, quantity: Math.min(i.quantity + 1, 10) }
+            : i
+        );
       }
       return [...prev, {
-        type:         'ticket',
         cartId,
+        type:         'ticket',
+        event_id:     item.event_id,
+        event_title:  item.event_title,
+        event_date:   item.event_date,
+        banner_image: item.banner_image || '',
+        tier:         item.tier,
+        tier_label:   item.tier_label || getTierLabel(item.tier),
+        price:        Number(item.price) || 0,
+        quantity:     1,
+      }];
+    });
+  }, []);
+
+  // ── addTicket ───────────────────────────────────────────────
+  // Used by Concerts.jsx: addTicket(event, { label, price }, qty)
+  const addTicket = useCallback((event, tierInfo, qty = 1) => {
+    const tierNum = labelToTierNum(tierInfo.label);
+    const cartId  = `ticket-${event.id}-${tierNum}`;
+
+    setCartItems(prev => {
+      const existing = prev.find(i => i.cartId === cartId);
+      if (existing) {
+        return prev.map(i =>
+          i.cartId === cartId
+            ? { ...i, quantity: Math.min(i.quantity + qty, 10) }
+            : i
+        );
+      }
+      return [...prev, {
+        cartId,
+        type:         'ticket',
         event_id:     event.id,
         event_title:  event.title,
-        venue:        event.venue,
         event_date:   event.event_date,
-        tier:         tier.label === 'Tier 1' ? 1 : tier.label === 'Tier 2' ? 2 : 3,
-        tier_label:   tier.label,
-        price:        tier.price,
-        quantity:     Math.min(quantity, 10),
-        banner_image: event.banner_image,
+        banner_image: event.banner_image || '',
+        tier:         tierNum,
+        tier_label:   getTierLabel(tierNum),
+        price:        Number(tierInfo.price) || 0,
+        quantity:     qty,
       }];
     });
-  };
+  }, []);
 
-  // ── Add product ────────────────────────────────────────────────────────────
-  const addProduct = (item, quantity = 1) => {
-    const cartId = `product-${item.id}`;
+  // ── getTicketInCart ─────────────────────────────────────────
+  const getTicketInCart = useCallback((eventId, tierLabel) => {
+    const tierNum = labelToTierNum(tierLabel);
+    const cartId  = `ticket-${eventId}-${tierNum}`;
+    return cartItems.find(i => i.cartId === cartId);
+  }, [cartItems]);
+
+  // ── addProductToCart ────────────────────────────────────────
+  const addProductToCart = useCallback((item) => {
+    const cartId = `product-${item.item_id}`;
     setCartItems(prev => {
       const existing = prev.find(i => i.cartId === cartId);
       if (existing) {
-        const newQty = Math.min(existing.quantity + quantity, item.stock);
-        return prev.map(i => i.cartId === cartId ? { ...i, quantity: newQty } : i);
+        return prev.map(i =>
+          i.cartId === cartId
+            ? { ...i, quantity: Math.min(i.quantity + 1, item.stock || 99) }
+            : i
+        );
       }
       return [...prev, {
-        type:        'product',
         cartId,
-        item_id:     item.id,
+        type:        'product',
+        item_id:     item.item_id,
+        id:          item.item_id,
         title:       item.title,
-        price:       item.price,
-        quantity:    Math.min(quantity, item.stock),
-        stock:       item.stock,
-        image_url:   item.image_url,
-        seller_name: item.seller_name,
-        category:    item.category,
+        price:       Number(item.price) || 0,
+        image_url:   item.image_url || '',
+        stock:       item.stock || 99,
+        seller_name: item.seller_name || '',
+        category:    item.category || '',
+        quantity:    1,
       }];
     });
-  };
+  }, []);
 
-  // ── Update / remove ────────────────────────────────────────────────────────
-  const removeItem = (cartId) =>
-    setCartItems(prev => prev.filter(i => i.cartId !== cartId));
+  // ── updateQuantity ──────────────────────────────────────────
+  const updateQuantity = useCallback((cartId, qty) => {
+    if (qty <= 0) {
+      setCartItems(prev => prev.filter(i => i.cartId !== cartId));
+    } else {
+      setCartItems(prev =>
+        prev.map(i => i.cartId === cartId ? { ...i, quantity: qty } : i)
+      );
+    }
+  }, []);
 
-  const updateQuantity = (cartId, qty) => {
-    if (qty <= 0) { removeItem(cartId); return; }
-    setCartItems(prev => prev.map(i => {
-      if (i.cartId !== cartId) return i;
-      const max = i.type === 'ticket' ? 10 : (i.stock || 99);
-      return { ...i, quantity: Math.min(qty, max) };
-    }));
-  };
+  const removeItem     = useCallback((cartId) => setCartItems(prev => prev.filter(i => i.cartId !== cartId)), []);
+  const removeFromCart = useCallback((id)     => setCartItems(prev => prev.filter(i => i.cartId !== id && i.id !== id && i.item_id !== id)), []);
+  const clearCart      = useCallback(()       => setCartItems([]), []);
 
-  const clearCart = () => setCartItems([]);
-
-  // ── Derived ────────────────────────────────────────────────────────────────
+  // ── Derived ─────────────────────────────────────────────────
   const ticketItems  = cartItems.filter(i => i.type === 'ticket');
   const productItems = cartItems.filter(i => i.type === 'product');
-  const cartCount    = cartItems.reduce((s, i) => s + i.quantity, 0);
   const cartTotal    = cartItems.reduce((s, i) => s + Number(i.price) * i.quantity, 0);
-
-  const getTicketInCart  = (eventId, tierLabel) =>
-    cartItems.find(i => i.cartId === `ticket-${eventId}-${tierLabel}`);
-  const getProductInCart = (itemId) =>
-    cartItems.find(i => i.cartId === `product-${itemId}`);
+  const cartCount    = cartItems.reduce((s, i) => s + i.quantity, 0);
 
   return (
     <CartContext.Provider value={{
       cartItems, ticketItems, productItems,
-      addTicket, addProduct,
-      updateQuantity, removeItem, clearCart,
-      cartCount, cartTotal,
-      getTicketInCart, getProductInCart,
+      cartTotal, cartCount,
+      addTicket, addTicketToCart, getTicketInCart,
+      addProductToCart,
+      updateQuantity, removeItem, removeFromCart, clearCart,
     }}>
       {children}
     </CartContext.Provider>
   );
 }
 
-export const useCart = () => useContext(CartContext);
+export const useCart = () => {
+  const ctx = useContext(CartContext);
+  if (!ctx) throw new Error('useCart must be used inside <CartProvider>');
+  return ctx;
+};
+
+// Export helpers so other components can use the same labels
+export const TIER_LABELS_MAP = TIER_LABELS;
+export { getTierLabel };
