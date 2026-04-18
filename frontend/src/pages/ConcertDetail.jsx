@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import api from '../api';
 
+const TIER_NAMES = { 1: 'Chair', 2: 'Standing', 3: 'Sofa' };
+const TIER_FULL  = { 1: 'Chair — General', 2: 'Standing', 3: 'Sofa — VIP' };
+
 export default function ConcertDetail({ onOpenCart }) {
   const { id }   = useParams();
   const { user } = useAuth();
-
-  const { addTicket, cartItems, cartTotal } = useCart();
+  const { addTicket, cartItems } = useCart();
 
   const [event, setEvent]         = useState(null);
   const [tiers, setTiers]         = useState([]);
@@ -25,13 +27,13 @@ export default function ConcertDetail({ onOpenCart }) {
         const ev = res.data?.event || res.data;
         setEvent(ev);
         const built = [];
-        // FIX: skip any tier with price === 0 — free tickets not allowed
+        // Skip any tier with price === 0 — free tickets not allowed
         if (ev?.tier1_quantity > 0 && Number(ev.tier1_price) > 0)
-          built.push({ id: 1, tierNum: 1, label: 'Tier 1', name: 'Tier 1 — General', price: Number(ev.tier1_price), capacity: ev.tier1_quantity });
+          built.push({ id: 1, tierNum: 1, label: TIER_NAMES[1], name: TIER_FULL[1], price: Number(ev.tier1_price), capacity: ev.tier1_quantity });
         if (ev?.tier2_quantity > 0 && Number(ev.tier2_price) > 0)
-          built.push({ id: 2, tierNum: 2, label: 'Tier 2', name: 'Tier 2 — VIP',     price: Number(ev.tier2_price), capacity: ev.tier2_quantity });
+          built.push({ id: 2, tierNum: 2, label: TIER_NAMES[2], name: TIER_FULL[2], price: Number(ev.tier2_price), capacity: ev.tier2_quantity });
         if (ev?.tier3_quantity > 0 && Number(ev.tier3_price) > 0)
-          built.push({ id: 3, tierNum: 3, label: 'Tier 3', name: 'Tier 3 — Student', price: Number(ev.tier3_price), capacity: ev.tier3_quantity });
+          built.push({ id: 3, tierNum: 3, label: TIER_NAMES[3], name: TIER_FULL[3], price: Number(ev.tier3_price), capacity: ev.tier3_quantity });
         setTiers(built);
       })
       .catch(() => {})
@@ -44,9 +46,8 @@ export default function ConcertDetail({ onOpenCart }) {
   };
 
   const cartTicketCount = (tierNum) => {
-    const cartId = `ticket-${id}-Tier ${tierNum}`;
-    const item   = (cartItems || []).find(i => i.cartId === cartId);
-    return item?.quantity || 0;
+    const cartId = `ticket-${id}-${tierNum}`;
+    return (cartItems || []).find(i => i.cartId === cartId)?.quantity || 0;
   };
 
   const totalInCart = (cartItems || [])
@@ -60,15 +61,10 @@ export default function ConcertDetail({ onOpenCart }) {
   const handleAddToCart = (tier) => {
     if (!user) { showAlert('error', 'Please login to buy tickets'); return; }
     const qty = tierQty[tier.tierNum] || 1;
+    // Pass tierNum explicitly so CartContext maps correctly
     addTicket(
-      {
-        id:           Number(id),
-        title:        event.title,
-        venue:        event.venue,
-        event_date:   event.date || event.event_date,
-        banner_image: event.poster || event.banner_image,
-      },
-      { label: tier.label, price: tier.price },
+      { id: Number(id), title: event.title, venue: event.venue, event_date: event.date || event.event_date, banner_image: event.poster || event.banner_image },
+      { label: tier.label, tierNum: tier.tierNum, price: tier.price },
       qty
     );
     setAddedTier(tier.tierNum);
@@ -79,15 +75,13 @@ export default function ConcertDetail({ onOpenCart }) {
   const formatDate = (ev) => {
     const raw = ev?.date || ev?.event_date;
     if (!raw) return 'Date TBD';
-    return new Date(raw).toLocaleDateString('en-GB', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
+    return new Date(raw).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   const singerName = event?.singer_name || event?.singer_username || 'Artist TBD';
 
   if (loading) return <div className="flex-center" style={{ minHeight: '60vh' }}><div className="spinner" /></div>;
-  if (!event) return (
+  if (!event)  return (
     <div className="main-content">
       <div className="empty-state">
         <div className="empty-icon">🎵</div>
@@ -98,13 +92,10 @@ export default function ConcertDetail({ onOpenCart }) {
 
   return (
     <div className="page-wrapper">
-
-      {/* ── Hero Banner ──────────────────────────────────────────────────── */}
       <div style={{ background: 'linear-gradient(135deg,#040810 0%,#0a1624 50%,#040810 100%)', borderBottom: '1px solid rgba(0,212,255,0.15)', padding: '40px 24px', position: 'relative', overflow: 'hidden' }}>
         {event.poster && (
           <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${event.poster})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.12, pointerEvents: 'none' }} />
         )}
-        <div style={{ position: 'absolute', top: 0, right: 0, width: '300px', height: '300px', background: 'radial-gradient(circle,rgba(0,212,255,0.08) 0%,transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative' }}>
           <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.2em', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '10px' }}>🎵 Concert</div>
           <h1 style={{ fontFamily: 'var(--text-display)', fontSize: 'clamp(20px,4vw,32px)', color: 'var(--cyan)', letterSpacing: '0.06em', textShadow: 'var(--cyan-glow)', marginBottom: '14px' }}>{event.title}</h1>
@@ -127,15 +118,12 @@ export default function ConcertDetail({ onOpenCart }) {
       <div className="main-content">
         {alert && <div className={`alert alert-${alert.type}`} style={{ marginBottom: '20px' }}>{alert.text}</div>}
 
-        {/* Cart banner */}
         {totalInCart > 0 && (
           <div style={{ background: 'rgba(0,212,255,0.07)', border: '1px solid rgba(0,212,255,0.25)', borderRadius: '10px', padding: '12px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
             <span style={{ fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--cyan)' }}>
               🎫 {totalInCart} ticket(s) from this event in your cart
             </span>
-            <button
-              onClick={onOpenCart}
-              style={{ background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', padding: '8px 18px', borderRadius: '8px', border: 'none', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+            <button onClick={onOpenCart} style={{ background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', padding: '8px 18px', borderRadius: '8px', border: 'none', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
               🛒 View Cart →
             </button>
           </div>
@@ -143,7 +131,6 @@ export default function ConcertDetail({ onOpenCart }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '20px' }}>
 
-          {/* ── Left: Info / Complaint tabs ────────────────────────────── */}
           <div className="panel">
             <div className="panel-tabs">
               {['INFO', ...(user ? ['COMPLAINT'] : [])].map(tab => (
@@ -160,12 +147,11 @@ export default function ConcertDetail({ onOpenCart }) {
                   )}
                   {tiers.length > 0 ? (
                     <div>
-                      <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Available Ticket Tiers</div>
+                      <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Available Seat Types</div>
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                         {tiers.map(tier => (
                           <div key={tier.id} style={{ background: 'var(--bg-secondary)', border: 'var(--border-dim)', borderRadius: 'var(--radius-sm)', padding: '16px 20px', minWidth: '150px' }}>
                             <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', marginBottom: '4px', letterSpacing: '0.1em' }}>{tier.name}</div>
-                            {/* FIX: always show price — free tiers are excluded at fetch time */}
                             <div style={{ fontFamily: 'var(--text-display)', fontSize: '22px', color: 'var(--gold)', textShadow: 'var(--gold-glow)' }}>
                               ৳{tier.price.toLocaleString()}
                             </div>
@@ -208,13 +194,11 @@ export default function ConcertDetail({ onOpenCart }) {
             </div>
           </div>
 
-          {/* ── Right: Add to Cart panel ────────────────────────────────── */}
           {user?.role === 'audience' && (
             <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,212,255,0.2)', borderTop: '2px solid var(--cyan)', borderRadius: 'var(--radius-lg)', padding: '24px', height: 'fit-content' }}>
               <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--cyan)', marginBottom: '20px' }}>
-                🎟️ Select Tickets
+                🎟️ Select Seat Type
               </div>
-
               {tiers.length === 0 ? (
                 <div style={{ fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--text-dim)' }}>No tickets available yet.</div>
               ) : (
@@ -227,7 +211,6 @@ export default function ConcertDetail({ onOpenCart }) {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                           <div>
                             <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{tier.name}</div>
-                            {/* FIX: always show price — free tiers filtered out at load time */}
                             <div style={{ fontFamily: 'var(--text-display)', fontSize: '20px', color: 'var(--gold)' }}>
                               ৳{tier.price.toLocaleString()}
                             </div>
@@ -257,15 +240,11 @@ export default function ConcertDetail({ onOpenCart }) {
                       </div>
                     );
                   })}
-
                   {totalInCart > 0 && (
-                    <button
-                      onClick={onOpenCart}
-                      style={{ display: 'block', width: '100%', background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', border: 'none', borderRadius: '10px', padding: '13px', fontWeight: '800', fontSize: '14px', cursor: 'pointer', fontFamily: 'var(--text-mono)', letterSpacing: '0.05em', textAlign: 'center', marginTop: '4px' }}>
+                    <button onClick={onOpenCart} style={{ display: 'block', width: '100%', background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', border: 'none', borderRadius: '10px', padding: '13px', fontWeight: '800', fontSize: '14px', cursor: 'pointer', fontFamily: 'var(--text-mono)', letterSpacing: '0.05em', textAlign: 'center', marginTop: '4px' }}>
                       🛒 VIEW CART · ৳{totalTicketValue.toLocaleString()}
                     </button>
                   )}
-
                   <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1.7 }}>
                     🔒 Secure checkout via cart<br />Mix tickets + marketplace items in one order
                   </div>
@@ -281,7 +260,6 @@ export default function ConcertDetail({ onOpenCart }) {
               <a href="/login" className="btn btn-solid-cyan btn-block">LOGIN</a>
             </div>
           )}
-
         </div>
       </div>
     </div>
