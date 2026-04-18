@@ -3,12 +3,8 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
-const statusColor = {
-  approved: '#00BFA6',
-};
-const statusLabel = {
-  approved: '🟢 Upcoming',
-};
+// Seat type names — maps DB tier number to display label
+const TIER_NAMES = { 1: 'Chair', 2: 'Standing', 3: 'Sofa' };
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -22,8 +18,6 @@ function formatTime(timeStr) {
   const hr = parseInt(h);
   return `${hr % 12 || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
 }
-
-// ─── Dynamic price badge components ──────────────────────────────────────────
 
 function DemandBar({ rate, color }) {
   const pct = Math.round((rate || 0) * 100);
@@ -39,7 +33,7 @@ function DemandBar({ rate, color }) {
   );
 }
 
-function PriceBadge({ tierNum, tierColor, pricing, basePrice, loading }) {
+function PriceBadge({ tierColor, pricing, basePrice, loading }) {
   const p = pricing;
   const dynamic = p?.dynamicPrice;
   const priceChanged = dynamic && dynamic !== basePrice;
@@ -74,7 +68,6 @@ function PriceBadge({ tierNum, tierColor, pricing, basePrice, loading }) {
   );
 }
 
-// ─── Concert Card ─────────────────────────────────────────────────────────────
 function ConcertCard({ event, onClick }) {
   return (
     <div
@@ -89,7 +82,6 @@ function ConcertCard({ event, onClick }) {
           : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: '56px' }}>🎵</div>
         }
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(10,22,40,0.95) 0%,rgba(10,22,40,0.3) 50%,transparent 100%)' }} />
-        {/* FIX: Always "Upcoming" — only approved concerts are fetched */}
         <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
           <span style={{ background: 'rgba(0,0,0,0.6)', color: '#00BFA6', fontSize: '11px', fontWeight: '600', padding: '3px 10px', borderRadius: '20px', backdropFilter: 'blur(4px)' }}>
             🟢 Upcoming
@@ -114,12 +106,13 @@ function ConcertCard({ event, onClick }) {
           {event.organizer_name && <div style={{ fontSize: '12px', color: '#4A5A72' }}>🏢 {event.organizer_name}</div>}
         </div>
 
+        {/* Seat type price pills — Chair / Standing / Sofa */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
           {[
             { n: 1, color: '#D4A853' }, { n: 2, color: '#00BFA6' }, { n: 3, color: '#b040ff' }
           ].filter(t => event[`tier${t.n}_quantity`] > 0).map(t => (
             <div key={t.n} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '6px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: '9px', color: '#8B9BB4', textTransform: 'uppercase' }}>Tier {t.n}</div>
+              <div style={{ fontSize: '9px', color: '#8B9BB4', textTransform: 'uppercase' }}>{TIER_NAMES[t.n]}</div>
               <div style={{ fontSize: '14px', fontWeight: '700', color: t.color }}>
                 ৳{event[`tier${t.n}_price`]}
               </div>
@@ -127,7 +120,6 @@ function ConcertCard({ event, onClick }) {
           ))}
         </div>
 
-        {/* FIX: Button always shows "View & Add Tickets" — only approved concerts appear */}
         <button style={{ width: '100%', background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', border: 'none', borderRadius: '8px', padding: '10px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', fontFamily: '"Exo 2",sans-serif' }}>
           🎟️ View & Add Tickets
         </button>
@@ -136,7 +128,6 @@ function ConcertCard({ event, onClick }) {
   );
 }
 
-// ─── Concert Modal with Bayesian dynamic pricing ──────────────────────────────
 function ConcertModal({ event, user, onClose, onOpenCart }) {
   const { addTicket, getTicketInCart } = useCart();
 
@@ -164,7 +155,7 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
     .filter(n => event[`tier${n}_quantity`] > 0)
     .map(n => ({
       n,
-      label:     `Tier ${n}`,
+      label:     TIER_NAMES[n],
       price:     dynamicPricing[`tier${n}`]?.dynamicPrice ?? event[`tier${n}_price`],
       basePrice: event[`tier${n}_price`],
       qty:       event[`tier${n}_quantity`],
@@ -174,7 +165,8 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
 
   const handleAddToCart = () => {
     if (!user) { window.location.href = '/login'; return; }
-    addTicket(event, { label: selectedTier.label, price: selectedTier.price }, ticketQty);
+    // Pass tierNum explicitly so CartContext maps 'Chair' → 1, etc. correctly
+    addTicket(event, { label: selectedTier.label, tierNum: selectedTier.n, price: selectedTier.price }, ticketQty);
     setAddedMsg(`✅ ${ticketQty}× ${selectedTier.label} added to cart at ৳${selectedTier.price}!`);
     setTimeout(() => setAddedMsg(''), 3000);
   };
@@ -223,7 +215,7 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
             <div style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
                 <div style={{ fontSize: '11px', color: '#4A5A72', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                  🎟️ Select Ticket Tier
+                  🎟️ Select Seat Type
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(176,64,255,0.1)', border: '1px solid rgba(176,64,255,0.25)', borderRadius: '20px', padding: '3px 10px' }}>
                   <span style={{ fontSize: '9px' }}>🧠</span>
@@ -236,7 +228,7 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
 
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 {tiers.map(tier => {
-                  const inCart   = getTicketInCart(event.id, tier.label);
+                  const inCart   = getTicketInCart(event.id, tier.n);
                   const selected = selectedTier?.n === tier.n;
                   return (
                     <div
@@ -244,9 +236,10 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
                       onClick={() => { setSelectedTier(tier); setTicketQty(1); }}
                       style={{ background: selected ? `${tier.color}20` : `${tier.color}08`, border: `1px solid ${selected ? tier.color : tier.color + '44'}`, borderRadius: '12px', padding: '14px 18px', cursor: 'pointer', transition: 'all 0.2s', flex: 1, minWidth: '120px', position: 'relative' }}
                     >
-                      <div style={{ fontSize: '11px', color: '#4A5A72', marginBottom: '6px' }}>Tier {tier.n}</div>
-                      <PriceBadge tierNum={tier.n} tierColor={tier.color} pricing={tier.pricing} basePrice={tier.basePrice} loading={priceLoading} />
-                      <div style={{ fontSize: '11px', color: '#4A5A72', marginTop: '6px' }}>{tier.qty} seats total</div>
+                      {/* Chair / Standing / Sofa label */}
+                      <div style={{ fontSize: '11px', color: '#4A5A72', marginBottom: '6px' }}>{TIER_NAMES[tier.n]}</div>
+                      <PriceBadge tierColor={tier.color} pricing={tier.pricing} basePrice={tier.basePrice} loading={priceLoading} />
+                      <div style={{ fontSize: '11px', color: '#4A5A72', marginTop: '6px' }}>{tier.qty} seats</div>
                       {inCart && <div style={{ fontSize: '10px', color: tier.color, marginTop: '4px', fontWeight: '700' }}>🛒 {inCart.quantity} in cart</div>}
                       {selected && <div style={{ position: 'absolute', top: '8px', right: '10px', fontSize: '12px', color: tier.color }}>✓</div>}
                     </div>
@@ -258,7 +251,7 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
                 <span style={{ fontSize: '14px' }}>🧠</span>
                 <div style={{ fontSize: '11px', color: '#4A5A72', lineHeight: '1.6' }}>
                   Prices are adjusted in real-time using a <span style={{ color: '#b040ff' }}>Bayesian Beta-Binomial demand model</span>.
-                  Prices rise as seats fill up or the event date approaches, and drop for far-future events as an early-bird incentive.
+                  Prices rise as seats fill up or the event date approaches.
                 </div>
               </div>
             </div>
@@ -267,8 +260,7 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
           {selectedTier && (
             <div style={{ background: '#122040', border: `1px solid ${selectedTier.color}33`, borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
               <div style={{ fontSize: '12px', color: '#4A5A72', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '14px' }}>
-                How many tickets?{' '}
-                <span style={{ color: '#8B9BB4', textTransform: 'none', letterSpacing: 0 }}>(max 10)</span>
+                How many tickets? <span style={{ color: '#8B9BB4', textTransform: 'none', letterSpacing: 0 }}>(max 10)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -299,11 +291,11 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
                 <button
                   onClick={handleAddToCart}
                   style={{ flex: 2, background: `linear-gradient(135deg,${selectedTier.color},${selectedTier.color}cc)`, color: selectedTier.color === '#D4A853' ? '#000' : '#fff', border: 'none', borderRadius: '10px', padding: '13px', fontWeight: '800', fontSize: '14px', cursor: 'pointer', fontFamily: '"Exo 2",sans-serif' }}>
-                  {!user ? '🔐 Login to Add'
-                    : `🛒 ADD TO CART · ৳${(selectedTier.price * ticketQty).toLocaleString()}`}
+                  {!user ? '🔐 Login to Add' : `🛒 ADD TO CART · ৳${(selectedTier.price * ticketQty).toLocaleString()}`}
                 </button>
+                {/* FIX: View Cart does NOT call handleAddToCart — prevents double-add */}
                 <button
-                  onClick={() => { handleAddToCart(); onClose(); onOpenCart(); }}
+                  onClick={() => { onClose(); onOpenCart(); }}
                   style={{ flex: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', padding: '13px', color: '#EEF2FF', cursor: 'pointer', fontFamily: '"Exo 2",sans-serif', fontSize: '12px', fontWeight: '600' }}>
                   🛒 View Cart
                 </button>
@@ -320,7 +312,6 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
   );
 }
 
-// ─── Main Concerts Page ───────────────────────────────────────────────────────
 export default function Concerts({ onOpenCart }) {
   const { user } = useAuth();
 
@@ -334,12 +325,10 @@ export default function Concerts({ onOpenCart }) {
   const [heroIdx, setHeroIdx]             = useState(0);
   const [selectedEvent, setSelectedEvent] = useState(null);
 
-  // FIX: Featured hero also only shows approved upcoming concerts
   useEffect(() => {
     api.get('/events/featured')
       .then(r => {
         const data = r.data || [];
-        // Extra client-side guard: only show live+launched in the hero
         setFeatured(data.filter(ev => ev.status === 'live' && ev.launch));
       })
       .catch(() => {});
@@ -356,13 +345,11 @@ export default function Concerts({ onOpenCart }) {
   const loadEvents = async (p = 1) => {
     setLoading(true);
     try {
-      // FIX: backend now always returns live+launched only — no status param needed
       const params = new URLSearchParams({ page: p, limit: 12 });
       if (search) params.append('search', search);
       const res = await api.get(`/events?${params}`);
-
-      // Extra client-side guard
       const raw = res.data.events || [];
+      // Client-side guard: only live + launched
       setEvents(raw.filter(ev => ev.status === 'live' && ev.launch));
       setPagination(res.data.pagination || {});
       setPage(p);
@@ -384,7 +371,6 @@ export default function Concerts({ onOpenCart }) {
         />
       )}
 
-      {/* Hero — only approved concerts cycle here */}
       {heroEvent && (
         <div style={{ position: 'relative', height: '480px', overflow: 'hidden' }}>
           <img src={heroEvent.banner_image} alt={heroEvent.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
@@ -393,7 +379,6 @@ export default function Concerts({ onOpenCart }) {
             <div style={{ maxWidth: '580px' }}>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
                 <span style={{ background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', fontSize: '11px', fontWeight: '800', padding: '4px 12px', borderRadius: '20px' }}>⭐ FEATURED</span>
-                {/* FIX: Static "Upcoming" badge — live/ended never reach the hero */}
                 <span style={{ background: 'rgba(0,191,166,0.15)', color: '#00BFA6', border: '1px solid rgba(0,191,166,0.3)', fontSize: '11px', padding: '4px 12px', borderRadius: '20px' }}>🟢 Upcoming</span>
               </div>
               <h1 style={{ fontFamily: '"Cinzel",serif', fontSize: 'clamp(20px,3vw,36px)', fontWeight: '700', color: '#EEF2FF', lineHeight: '1.3', marginBottom: '12px' }}>{heroEvent.title}</h1>
@@ -416,7 +401,6 @@ export default function Concerts({ onOpenCart }) {
         </div>
       )}
 
-      {/* Listing */}
       <div style={{ maxWidth: '1300px', margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
@@ -426,7 +410,6 @@ export default function Concerts({ onOpenCart }) {
           <p style={{ color: '#4A5A72', fontSize: '14px', marginLeft: '16px' }}>University of Dhaka · IIT-DU · TSC · Shaheed Minar</p>
         </div>
 
-        {/* FIX: Search only — status filter removed from public view */}
         <div style={{ background: '#0A1628', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '20px', marginBottom: '28px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: '1 1 300px' }}>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#4A5A72', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Search Concerts</label>
@@ -455,7 +438,7 @@ export default function Concerts({ onOpenCart }) {
           <div style={{ textAlign: 'center', padding: '80px', color: '#4A5A72' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎵</div>
             <div style={{ fontSize: '18px', marginBottom: '8px', color: '#8B9BB4' }}>No upcoming concerts found</div>
-            <div style={{ fontSize: '14px' }}>Check back soon — new events are approved regularly.</div>
+            <div style={{ fontSize: '14px' }}>Check back soon — new events are launched regularly.</div>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: '24px' }}>
