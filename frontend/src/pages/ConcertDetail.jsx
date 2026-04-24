@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -7,18 +7,194 @@ import api from '../api';
 const TIER_NAMES = { 1: 'Chair', 2: 'Standing', 3: 'Sofa' };
 const TIER_FULL  = { 1: 'Chair — General', 2: 'Standing', 3: 'Sofa — VIP' };
 
+// ─── Complaint Box Component ──────────────────────────────────────────────────
+function ComplaintBox({ eventId, hasTicket }) {
+  const fileRef                     = useRef();
+  const [text, setText]             = useState('');
+  const [files, setFiles]           = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted]   = useState(false);
+  const [error, setError]           = useState('');
+
+  const handleFiles = (e) => {
+    const added = Array.from(e.target.files).map(f => {
+      const type = f.type.startsWith('image') ? 'image'
+        : f.type.startsWith('audio') ? 'audio'
+        : f.type.startsWith('video') ? 'video' : 'file';
+      const preview = type === 'image' ? URL.createObjectURL(f) : null;
+      return { file: f, preview, type, name: f.name, size: f.size };
+    });
+    setFiles(prev => [...prev, ...added].slice(0, 5));
+    e.target.value = '';
+  };
+
+  const removeFile = (idx) => {
+    setFiles(prev => {
+      const next = [...prev];
+      if (next[idx].preview) URL.revokeObjectURL(next[idx].preview);
+      next.splice(idx, 1);
+      return next;
+    });
+  };
+
+  const handleSubmit = async () => {
+    if (!text.trim() && files.length === 0) {
+      setError('Please write a description or attach at least one file.');
+      return;
+    }
+    setSubmitting(true); 
+    setError('');
+    try {
+      const fd = new FormData();
+      fd.append('event_id', eventId);
+      if (text.trim()) fd.append('text_content', text.trim());
+      files.forEach(f => fd.append('files', f.file));
+      
+      await api.post('/complaints', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setSubmitted(true);
+      setText(''); 
+      setFiles([]);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to submit. Please try again.');
+    } finally { 
+      setSubmitting(false); 
+    }
+  };
+
+  // Not a ticket holder
+  if (!hasTicket) return (
+    <div style={{ background: 'rgba(212,168,83,0.06)', border: '1px solid rgba(212,168,83,0.2)', borderRadius: 'var(--radius-sm)', padding: '24px', textAlign: 'center' }}>
+      <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎟️</div>
+      <div style={{ fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--gold)', letterSpacing: '0.05em', lineHeight: 1.6 }}>
+        You need a ticket for this event to submit a complaint.<br />
+        <span style={{ color: 'var(--text-dim)' }}>Purchase a ticket first, then come back here.</span>
+      </div>
+    </div>
+  );
+
+  // Success state
+  if (submitted) return (
+    <div style={{ background: 'rgba(0,191,166,0.07)', border: '1px solid rgba(0,191,166,0.25)', borderRadius: 'var(--radius-sm)', padding: '32px', textAlign: 'center' }}>
+      <div style={{ fontSize: '44px', marginBottom: '12px' }}>✅</div>
+      <div style={{ fontFamily: 'var(--text-display)', fontSize: '16px', color: 'var(--cyan)', marginBottom: '8px' }}>Complaint Submitted</div>
+      <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '20px', lineHeight: 1.7 }}>
+        Your complaint has been forwarded to the event organizer and system admin.<br />
+        You can track its status from your dashboard.
+      </div>
+      <button onClick={() => setSubmitted(false)}
+        style={{ background: 'none', border: '1px solid rgba(0,212,255,0.3)', borderRadius: '8px', color: 'var(--cyan)', padding: '8px 20px', cursor: 'pointer', fontFamily: 'var(--text-mono)', fontSize: '12px' }}>
+        Submit Another
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: '560px' }}>
+      <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: '18px', lineHeight: 1.7, padding: '10px 14px', background: 'rgba(255,82,82,0.04)', border: '1px solid rgba(255,82,82,0.12)', borderRadius: '8px' }}>
+        ℹ️ Complaints are visible to the <span style={{ color: '#FF5252' }}>event organizer</span> and <span style={{ color: '#FF5252' }}>system admin</span>. Attach images, audio, or video as evidence.
+      </div>
+
+      {error && (
+        <div style={{ background: 'rgba(255,82,82,0.08)', border: '1px solid rgba(255,82,82,0.25)', borderRadius: '8px', padding: '10px 14px', color: '#FF5252', fontSize: '13px', marginBottom: '14px' }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* Text */}
+      <div className="form-group">
+        <label className="form-label">Description</label>
+        <textarea
+          className="form-control"
+          rows={5}
+          placeholder="Describe your issue — what happened, when, and where in the venue..."
+          value={text}
+          onChange={e => setText(e.target.value)}
+          style={{ resize: 'vertical' }}
+        />
+      </div>
+
+      {/* Drop zone */}
+      <div style={{ marginBottom: '14px' }}>
+        <label className="form-label">
+          Attachments
+          <span style={{ color: 'var(--text-dim)', textTransform: 'none', letterSpacing: 0, fontWeight: 400, marginLeft: '6px' }}>
+            up to 5 files · images, audio, video · max 50 MB each
+          </span>
+        </label>
+        <input ref={fileRef} type="file" multiple accept="image/*,audio/*,video/*" onChange={handleFiles} style={{ display: 'none' }} />
+        <div
+          onClick={() => fileRef.current.click()}
+          style={{ border: '1.5px dashed rgba(0,212,255,0.22)', borderRadius: '10px', padding: '22px', textAlign: 'center', cursor: 'pointer', background: 'rgba(0,212,255,0.02)', transition: 'border-color 0.2s' }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(0,212,255,0.5)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(0,212,255,0.22)'}
+        >
+          <div style={{ fontSize: '30px', marginBottom: '7px' }}>📎</div>
+          <div style={{ fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--text-dim)' }}>
+            Click to attach files
+          </div>
+          <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', marginTop: '5px', opacity: 0.6 }}>
+            🖼️ Images &nbsp;·&nbsp; 🎵 Audio &nbsp;·&nbsp; 📹 Video
+          </div>
+        </div>
+      </div>
+
+      {/* File previews */}
+      {files.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
+          {files.map((f, i) => (
+            <div key={i} style={{ position: 'relative', background: 'var(--bg-secondary)', border: 'var(--border-dim)', borderRadius: '8px', overflow: 'hidden', width: '140px' }}>
+              {f.type === 'image' && f.preview
+                ? <img src={f.preview} alt={f.name} style={{ width: '140px', height: '90px', objectFit: 'cover', display: 'block' }} />
+                : (
+                  <div style={{ width: '140px', height: '90px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                    <span style={{ fontSize: '30px' }}>{f.type === 'audio' ? '🎵' : f.type === 'video' ? '📹' : '📎'}</span>
+                    <span style={{ fontFamily: 'var(--text-mono)', fontSize: '9px', color: 'var(--text-dim)', textAlign: 'center', padding: '0 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>{f.name}</span>
+                    <span style={{ fontFamily: 'var(--text-mono)', fontSize: '9px', color: 'var(--text-dim)', opacity: 0.7 }}>{(f.size / (1024 * 1024)).toFixed(1)} MB</span>
+                  </div>
+                )
+              }
+              <button onClick={() => removeFile(i)}
+                style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.75)', border: 'none', borderRadius: '50%', width: '20px', height: '20px', color: '#fff', cursor: 'pointer', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                ✕
+              </button>
+            </div>
+          ))}
+          {files.length < 5 && (
+            <button onClick={() => fileRef.current.click()}
+              style={{ width: '140px', height: '90px', background: 'rgba(0,212,255,0.03)', border: '1.5px dashed rgba(0,212,255,0.18)', borderRadius: '8px', color: 'var(--text-dim)', cursor: 'pointer', fontSize: '24px' }}>
+              +
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Submit */}
+      <button
+        onClick={handleSubmit}
+        disabled={submitting || (!text.trim() && files.length === 0)}
+        className="btn btn-danger"
+        style={{ opacity: (submitting || (!text.trim() && files.length === 0)) ? 0.5 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }}>
+        {submitting ? '⏳ Submitting...' : '📨 SUBMIT COMPLAINT'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Main ConcertDetail Page ──────────────────────────────────────────────────
 export default function ConcertDetail({ onOpenCart }) {
   const { id }   = useParams();
   const { user } = useAuth();
   const { addTicket, cartItems } = useCart();
 
-  const [event, setEvent]         = useState(null);
-  const [tiers, setTiers]         = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const [event,     setEvent]     = useState(null);
+  const [tiers,     setTiers]     = useState([]);
+  const [hasTicket, setHasTicket] = useState(false);
+  const [loading,   setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState('INFO');
-  const [complaint, setComplaint] = useState({ description: '' });
-  const [alert, setAlert]         = useState(null);
-  const [tierQty, setTierQty]     = useState({ 1: 1, 2: 1, 3: 1 });
+  const [alert,     setAlert]     = useState(null);
+  const [tierQty,   setTierQty]   = useState({ 1: 1, 2: 1, 3: 1 });
   const [addedTier, setAddedTier] = useState(null);
 
   useEffect(() => {
@@ -27,7 +203,6 @@ export default function ConcertDetail({ onOpenCart }) {
         const ev = res.data?.event || res.data;
         setEvent(ev);
         const built = [];
-        // Skip any tier with price === 0 — free tickets not allowed
         if (ev?.tier1_quantity > 0 && Number(ev.tier1_price) > 0)
           built.push({ id: 1, tierNum: 1, label: TIER_NAMES[1], name: TIER_FULL[1], price: Number(ev.tier1_price), capacity: ev.tier1_quantity });
         if (ev?.tier2_quantity > 0 && Number(ev.tier2_price) > 0)
@@ -39,6 +214,17 @@ export default function ConcertDetail({ onOpenCart }) {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Check if audience user has a ticket for this event
+  useEffect(() => {
+    if (!user || user.role !== 'audience') return;
+    api.get('/tickets/mine')
+      .then(res => {
+        const purchases = res.data?.purchases || [];
+        setHasTicket(purchases.some(p => String(p.event_id) === String(id)));
+      })
+      .catch(() => {});
+  }, [id, user]);
 
   const showAlert = (type, text) => {
     setAlert({ type, text });
@@ -61,7 +247,6 @@ export default function ConcertDetail({ onOpenCart }) {
   const handleAddToCart = (tier) => {
     if (!user) { showAlert('error', 'Please login to buy tickets'); return; }
     const qty = tierQty[tier.tierNum] || 1;
-    // Pass tierNum explicitly so CartContext maps correctly
     addTicket(
       { id: Number(id), title: event.title, venue: event.venue, event_date: event.date || event.event_date, banner_image: event.poster || event.banner_image },
       { label: tier.label, tierNum: tier.tierNum, price: tier.price },
@@ -92,10 +277,10 @@ export default function ConcertDetail({ onOpenCart }) {
 
   return (
     <div className="page-wrapper">
+
+      {/* Hero Banner */}
       <div style={{ background: 'linear-gradient(135deg,#040810 0%,#0a1624 50%,#040810 100%)', borderBottom: '1px solid rgba(0,212,255,0.15)', padding: '40px 24px', position: 'relative', overflow: 'hidden' }}>
-        {event.poster && (
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${event.poster})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.12, pointerEvents: 'none' }} />
-        )}
+        {event.poster && <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${event.poster})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.12, pointerEvents: 'none' }} />}
         <div style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative' }}>
           <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.2em', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '10px' }}>🎵 Concert</div>
           <h1 style={{ fontFamily: 'var(--text-display)', fontSize: 'clamp(20px,4vw,32px)', color: 'var(--cyan)', letterSpacing: '0.06em', textShadow: 'var(--cyan-glow)', marginBottom: '14px' }}>{event.title}</h1>
@@ -103,7 +288,7 @@ export default function ConcertDetail({ onOpenCart }) {
             {[
               { icon: '📍', text: event.venue || 'Venue TBD' },
               { icon: '📅', text: formatDate(event) },
-              { icon: '🕐', text: event.time ? String(event.time).slice(0, 5) : 'Time TBD' },
+              { icon: '🕐', text: event.time ? String(event.time).slice(0,5) : 'Time TBD' },
               { icon: '🎤', text: singerName },
               { icon: '🏙️', text: event.city || 'Dhaka' },
             ].map(item => (
@@ -118,6 +303,7 @@ export default function ConcertDetail({ onOpenCart }) {
       <div className="main-content">
         {alert && <div className={`alert alert-${alert.type}`} style={{ marginBottom: '20px' }}>{alert.text}</div>}
 
+        {/* Cart banner */}
         {totalInCart > 0 && (
           <div style={{ background: 'rgba(0,212,255,0.07)', border: '1px solid rgba(0,212,255,0.25)', borderRadius: '10px', padding: '12px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
             <span style={{ fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--cyan)' }}>
@@ -131,12 +317,21 @@ export default function ConcertDetail({ onOpenCart }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '20px' }}>
 
+          {/* Left panel — Info + Complaint tabs */}
           <div className="panel">
             <div className="panel-tabs">
-              {['INFO', ...(user ? ['COMPLAINT'] : [])].map(tab => (
-                <button key={tab} className={`panel-tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>{tab}</button>
+              {['INFO', ...(user?.role === 'audience' ? ['COMPLAINT'] : [])].map(tab => (
+                <button key={tab} className={`panel-tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
+                  {tab}
+                  {tab === 'COMPLAINT' && (
+                    <span style={{ marginLeft: '6px', background: hasTicket ? '#FF5252' : '#555', color: '#fff', borderRadius: '20px', padding: '1px 7px', fontSize: '9px', fontWeight: '700' }}>
+                      {hasTicket ? '● NEW' : '🔒'}
+                    </span>
+                  )}
+                </button>
               ))}
             </div>
+
             <div className="panel-body">
               {activeTab === 'INFO' ? (
                 <div>
@@ -147,7 +342,9 @@ export default function ConcertDetail({ onOpenCart }) {
                   )}
                   {tiers.length > 0 ? (
                     <div>
-                      <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>Available Seat Types</div>
+                      <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                        Available Seat Types
+                      </div>
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                         {tiers.map(tier => (
                           <div key={tier.id} style={{ background: 'var(--bg-secondary)', border: 'var(--border-dim)', borderRadius: 'var(--radius-sm)', padding: '16px 20px', minWidth: '150px' }}>
@@ -172,28 +369,23 @@ export default function ConcertDetail({ onOpenCart }) {
                   )}
                 </div>
               ) : (
-                <div style={{ maxWidth: '480px' }}>
-                  <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '16px', letterSpacing: '0.05em' }}>Submit a complaint about this event</div>
-                  <div className="form-group">
-                    <label className="form-label">Description</label>
-                    <textarea className="form-control" rows={5} placeholder="Describe the issue in detail..."
-                      value={complaint.description}
-                      onChange={e => setComplaint({ description: e.target.value })}
-                      style={{ resize: 'vertical' }} />
+                /* COMPLAINT TAB */
+                <div>
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{ fontFamily: 'var(--text-display)', fontSize: '16px', color: '#FF5252', marginBottom: '6px' }}>
+                      📋 Submit a Complaint
+                    </div>
+                    <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)' }}>
+                      Report an issue — sound, security, facilities, staff behaviour, or anything else.
+                    </div>
                   </div>
-                  <button className="btn btn-danger" onClick={async () => {
-                    if (!complaint.description) { showAlert('error', 'Please describe the issue'); return; }
-                    try {
-                      await api.post('/complaints', { event_id: Number(id), description: complaint.description });
-                      setComplaint({ description: '' });
-                      showAlert('success', 'Complaint submitted successfully');
-                    } catch { showAlert('error', 'Failed to submit complaint'); }
-                  }}>SUBMIT COMPLAINT</button>
+                  <ComplaintBox eventId={Number(id)} hasTicket={hasTicket} />
                 </div>
               )}
             </div>
           </div>
 
+          {/* Right: ticket purchase panel */}
           {user?.role === 'audience' && (
             <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,212,255,0.2)', borderTop: '2px solid var(--cyan)', borderRadius: 'var(--radius-lg)', padding: '24px', height: 'fit-content' }}>
               <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--cyan)', marginBottom: '20px' }}>
@@ -241,7 +433,8 @@ export default function ConcertDetail({ onOpenCart }) {
                     );
                   })}
                   {totalInCart > 0 && (
-                    <button onClick={onOpenCart} style={{ display: 'block', width: '100%', background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', border: 'none', borderRadius: '10px', padding: '13px', fontWeight: '800', fontSize: '14px', cursor: 'pointer', fontFamily: 'var(--text-mono)', letterSpacing: '0.05em', textAlign: 'center', marginTop: '4px' }}>
+                    <button onClick={onOpenCart}
+                      style={{ display: 'block', width: '100%', background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', border: 'none', borderRadius: '10px', padding: '13px', fontWeight: '800', fontSize: '14px', cursor: 'pointer', fontFamily: 'var(--text-mono)', letterSpacing: '0.05em', textAlign: 'center' }}>
                       🛒 VIEW CART · ৳{totalTicketValue.toLocaleString()}
                     </button>
                   )}
