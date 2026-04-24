@@ -6,13 +6,15 @@ const TIER_LABELS = { 1: 'Standing', 2: 'Chair', 3: 'Sofa' };
 const getTierLabel = (tier) => TIER_LABELS[tier] || `Tier ${tier}`;
 
 // Map label string back to tier number
+// ✅ FIXED — safely converts any type to string first
 const labelToTierNum = (label = '') => {
-  const key = label.toLowerCase().trim();
+  const str = String(label || '');
+  const key = str.toLowerCase().trim();
   if (key === 'standing') return 1;
   if (key === 'chair')    return 2;
   if (key === 'sofa')     return 3;
-  // fallback: parse number from e.g. "Tier 1"
-  const n = parseInt(label.replace(/\D/g, ''));
+  // fallback: parse number from e.g. "Tier 1" or "1"
+  const n = parseInt(str.replace(/\D/g, ''));
   return [1, 2, 3].includes(n) ? n : 1;
 };
 
@@ -85,11 +87,18 @@ export function CartProvider({ children }) {
   }, []);
 
   // ── getTicketInCart ─────────────────────────────────────────
-  const getTicketInCart = useCallback((eventId, tierLabel) => {
-    const tierNum = labelToTierNum(tierLabel);
-    const cartId  = `ticket-${eventId}-${tierNum}`;
-    return cartItems.find(i => i.cartId === cartId);
-  }, [cartItems]);
+ const getTicketInCart = useCallback((eventId, tierLabel) => {
+  const str     = String(tierLabel || '');
+  const key     = str.toLowerCase().trim();
+  const labelMap = { standing: 1, chair: 2, sofa: 3 };
+  let tierNum   = labelMap[key];
+  if (!tierNum) {
+    const n = parseInt(str.replace(/\D/g, ''));
+    tierNum = [1, 2, 3].includes(n) ? n : 1;
+  }
+  const cartId = `ticket-${eventId}-${tierNum}`;
+  return cartItems.find(i => i.cartId === cartId);
+}, [cartItems]);
 
   // ── addProductToCart ────────────────────────────────────────
   const addProductToCart = useCallback((item) => {
