@@ -45,21 +45,28 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/featured', async (req, res) => {
+router.get('/organizer/mine', authenticate, requireRole('organizer'), async (req, res) => {
   try {
     const [events] = await db.query(
-      `SELECT e.event_id AS id, e.title, e.poster AS banner_image,
-              e.date AS event_date, e.time AS event_time, e.venue, e.city,
-              e.status, e.custom_url, e.tier1_price, e.tier2_price, e.tier3_price,
-              s.unique_username AS singer_name, s.profile_picture AS singer_pic
-       FROM \`EVENT\` e LEFT JOIN \`USER\` s ON e.singer_id = s.u_id
-       WHERE e.status = 'live' AND e.date >= CURDATE()
-       ORDER BY e.date ASC LIMIT 6`
+      `SELECT e.*,
+              s.unique_username AS singer_name,
+              s.profile_picture AS singer_pic,
+              COALESCE(t1.sold, 0) AS tier1_sold,
+              COALESCE(t2.sold, 0) AS tier2_sold,
+              COALESCE(t3.sold, 0) AS tier3_sold
+       FROM \`EVENT\` e
+       LEFT JOIN \`USER\` s ON e.singer_id = s.u_id
+       LEFT JOIN (SELECT event_id, COUNT(*) AS sold FROM \`TICKET\` WHERE tier=1 GROUP BY event_id) t1 ON t1.event_id = e.event_id
+       LEFT JOIN (SELECT event_id, COUNT(*) AS sold FROM \`TICKET\` WHERE tier=2 GROUP BY event_id) t2 ON t2.event_id = e.event_id
+       LEFT JOIN (SELECT event_id, COUNT(*) AS sold FROM \`TICKET\` WHERE tier=3 GROUP BY event_id) t3 ON t3.event_id = e.event_id
+       WHERE e.organizer_id = ?
+       ORDER BY e.created_at DESC`,
+      [req.user.u_id]
     );
     res.json(events);
   } catch (err) {
-    console.error('GET /events/featured:', err.sqlMessage || err.message);
-    res.status(500).json({ message: 'Failed to load featured events' });
+    console.error('GET /organizer/mine:', err.sqlMessage || err.message);
+    res.status(500).json({ message: 'Failed to load your events' });
   }
 });
 
