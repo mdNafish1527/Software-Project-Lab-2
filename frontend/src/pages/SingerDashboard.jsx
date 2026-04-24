@@ -333,41 +333,55 @@ export default function SingerDashboard() {
 
   const userId = user?.u_id || user?.id;
 
-  useEffect(() => {
-    if (!userId) return;
-    setLoading(true);
+ useEffect(() => {
+  if (!userId) return;
+  setLoading(true);
 
-    Promise.all([
-      api.get('/events/bookings/mine'),
-      api.get('/users/me'),
-      api.get('/marketplace').catch(() => ({ data: [] })),
-      api.get('/users/singer/availability').catch(() => ({ data: [] })),
-      api.get('/users/singer/shows').catch(() => ({ data: [] })),
-    ])
-      .then(([bkRes, meRes, mktRes, availRes, showsRes]) => {
-        setBookings(Array.isArray(bkRes.data) ? bkRes.data : []);
+  Promise.all([
+    api.get('/events/bookings/mine').catch(err => {
+      console.error('❌ /events/bookings/mine:', err.response?.status, err.response?.data);
+      return { data: [] };
+    }),
+    api.get('/users/me').catch(err => {
+      console.error('❌ /users/me:', err.response?.status, err.response?.data);
+      return { data: {} };
+    }),
+    api.get('/marketplace').catch(err => {
+      console.error('❌ /marketplace:', err.response?.status, err.response?.data);
+      return { data: [] };
+    }),
+    api.get('/users/singer/availability').catch(err => {
+      console.error('❌ /singer/availability:', err.response?.status, err.response?.data);
+      return { data: [] };
+    }),
+    api.get('/users/singer/shows').catch(err => {
+      console.error('❌ /singer/shows:', err.response?.status, err.response?.data);
+      return { data: [] };
+    }),
+  ])
+    .then(([bkRes, meRes, mktRes, availRes, showsRes]) => {
+      setBookings(Array.isArray(bkRes.data) ? bkRes.data : []);
 
-        const me = meRes.data || {};
-        setProfile(me);
-        setProfileForm({
-          genre:       me.genre       || '',
-          bio:         me.bio         || '',
-          booking_fee: me.booking_fee || '',
-          available:   me.available   !== false,
-        });
+      const me = meRes.data || {};
+      setProfile(me);
+      setProfileForm({
+        genre:       me.genre       || '',
+        bio:         me.bio         || '',
+        booking_fee: me.booking_fee || '',
+        available:   me.available   !== false,
+      });
 
-        const allItems = mktRes.data?.items || (Array.isArray(mktRes.data) ? mktRes.data : []);
-        setItems(allItems.filter(i => i.seller_id === userId));
+      const allItems = mktRes.data?.items || (Array.isArray(mktRes.data) ? mktRes.data : []);
+      setItems(allItems.filter(i => i.seller_id === userId));
 
-        setAvailableDates(Array.isArray(availRes.data) ? availRes.data : []);
-        setEvents(Array.isArray(showsRes.data) ? showsRes.data : []);
-      })
-      .catch(err => {
-        console.error('SingerDashboard load error:', err.response?.data || err.message);
-        showAlert('error', 'Failed to load dashboard data. Please refresh.');
-      })
-      .finally(() => setLoading(false));
-  }, [userId]);
+      setAvailableDates(Array.isArray(availRes.data) ? availRes.data : []);
+      setEvents(Array.isArray(showsRes.data) ? showsRes.data : []);
+    })
+    .catch(err => {
+      console.error('SingerDashboard unexpected error:', err);
+    })
+    .finally(() => setLoading(false));
+}, [userId]);
 
   const showAlert = (type, text) => {
     setAlert({ type, text });
