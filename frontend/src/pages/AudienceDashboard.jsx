@@ -2,7 +2,161 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
-import ComplaintCard from '../components/ComplaintCard';
+
+// ─── ComplaintCard (inlined — no separate file needed) ────────────────────────
+const STATUS_STYLE = {
+  pending:   { badge: 'badge-red',   label: 'PENDING'   },
+  reviewed:  { badge: 'badge-gold',  label: 'REVIEWED'  },
+  resolved:  { badge: 'badge-green', label: 'RESOLVED'  },
+  dismissed: { badge: 'badge-gold',  label: 'DISMISSED' },
+};
+
+function formatComplaintDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-BD', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function detectMediaType(media) {
+  const src  = (media.url || media.file_url || media.path || '').toLowerCase();
+  const mime = (media.media_type || media.type || '').toLowerCase();
+  if (mime.startsWith('image') || /\.(jpg|jpeg|png|gif|webp)/.test(src)) return 'image';
+  if (mime.startsWith('audio') || /\.(mp3|wav|ogg|m4a)/.test(src))       return 'audio';
+  if (mime.startsWith('video') || /\.(mp4|webm|mov)/.test(src))           return 'video';
+  return 'file';
+}
+
+function MediaItem({ media }) {
+  const type = detectMediaType(media);
+  const src  = media.url || media.file_url || media.path || '';
+  const name = media.original_name || media.filename || media.name || 'Attachment';
+
+  if (type === 'image') return (
+    <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', maxWidth: '260px' }}>
+      <img src={src} alt={name}
+        style={{ width: '100%', display: 'block', maxHeight: '180px', objectFit: 'cover', cursor: 'pointer' }}
+        onClick={() => window.open(src, '_blank')}
+        onError={e => { e.target.style.display = 'none'; }} />
+      <div style={{ padding: '5px 8px', background: 'rgba(0,0,0,0.4)', fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
+        🖼️ {name}
+      </div>
+    </div>
+  );
+
+  if (type === 'audio') return (
+    <div style={{ background: 'rgba(212,168,83,0.05)', border: '1px solid rgba(212,168,83,0.2)', borderRadius: '8px', padding: '10px 12px', minWidth: '220px' }}>
+      <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--gold)', marginBottom: '6px' }}>🎵 {name}</div>
+      <audio controls src={src} style={{ width: '100%', height: '32px' }} />
+    </div>
+  );
+
+  if (type === 'video') return (
+    <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', maxWidth: '280px' }}>
+      <video controls src={src} style={{ width: '100%', maxHeight: '180px', display: 'block', background: '#000' }} />
+      <div style={{ padding: '5px 8px', background: 'rgba(0,0,0,0.4)', fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
+        📹 {name}
+      </div>
+    </div>
+  );
+
+  return (
+    <a href={src} target="_blank" rel="noopener noreferrer"
+      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(0,212,255,0.05)', border: '1px solid rgba(0,212,255,0.2)', borderRadius: '8px', padding: '8px 12px', fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--cyan)', textDecoration: 'none' }}>
+      📎 {name}
+    </a>
+  );
+}
+
+function ComplaintCard({ complaint, showEvent = true, showReporter = true }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!complaint) return null;
+
+  const body      = complaint.description || complaint.text_content || '';
+  const mediaList = Array.isArray(complaint.media)
+    ? complaint.media
+    : Array.isArray(complaint.attachments)
+      ? complaint.attachments
+      : [];
+
+  const statusKey        = complaint.status || 'pending';
+  const { badge, label } = STATUS_STYLE[statusKey] || STATUS_STYLE.pending;
+  const borderAccent     = statusKey === 'resolved' ? 'var(--cyan)'
+    : statusKey === 'dismissed' ? 'var(--gold)' : '#FF5252';
+
+  return (
+    <div style={{ background: 'var(--bg-secondary)', border: `1px solid ${borderAccent}33`, borderLeft: `3px solid ${borderAccent}`, borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+
+      {/* Header */}
+      <div
+        style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', gap: '12px', alignItems: 'flex-start' }}
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
+            <span className={`badge ${badge}`}>{label}</span>
+            {complaint.category && (
+              <span style={{ background: 'rgba(212,168,83,0.1)', color: 'var(--gold)', border: '1px solid rgba(212,168,83,0.25)', borderRadius: '20px', fontSize: '10px', fontWeight: '600', padding: '2px 9px', fontFamily: 'var(--text-mono)' }}>
+                {complaint.category}
+              </span>
+            )}
+            {mediaList.length > 0 && (
+              <span style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
+                📎 {mediaList.length} attachment{mediaList.length > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+
+          {showEvent && complaint.event_title && (
+            <div style={{ fontFamily: 'var(--text-display)', fontSize: '13px', color: 'var(--gold)', marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              🎵 {complaint.event_title}
+            </div>
+          )}
+
+          <div style={{ fontFamily: 'var(--text-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, display: expanded ? 'block' : '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: expanded ? 'visible' : 'hidden' }}>
+            {body}
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '6px', fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
+            {showReporter && complaint.reporter_name && <span>👤 {complaint.reporter_name}</span>}
+            {complaint.ticket_id && <span>🎟️ {complaint.ticket_id}</span>}
+            <span>🕐 {formatComplaintDate(complaint.created_at)}</span>
+          </div>
+        </div>
+        <div style={{ color: 'var(--text-dim)', fontSize: '14px', flexShrink: 0 }}>{expanded ? '▴' : '▾'}</div>
+      </div>
+
+      {/* Expanded */}
+      {expanded && (
+        <div style={{ padding: '0 16px 16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          {body && (
+            <div style={{ fontFamily: 'var(--text-body)', fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.8, marginTop: '14px', marginBottom: mediaList.length ? '16px' : '0' }}>
+              {body}
+            </div>
+          )}
+          {mediaList.length > 0 && (
+            <div>
+              <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '10px', marginTop: '14px' }}>
+                Attachments
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                {mediaList.map((m, i) => <MediaItem key={i} media={m} />)}
+              </div>
+            </div>
+          )}
+          {complaint.admin_note && (
+            <div style={{ marginTop: '14px', background: 'rgba(0,212,255,0.05)', border: '1px solid rgba(0,212,255,0.15)', borderRadius: '8px', padding: '10px 14px' }}>
+              <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--cyan)', letterSpacing: '0.1em', marginBottom: '4px' }}>ADMIN NOTE</div>
+              <div style={{ fontFamily: 'var(--text-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{complaint.admin_note}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+// ─── End ComplaintCard ────────────────────────────────────────────────────────
 
 const TIER_NAMES = { 1: 'Standing', 2: 'Chair', 3: 'Sofa' };
 
@@ -47,7 +201,7 @@ function TicketCard({ ticket }) {
               ['📅', ticketDate(ticket)],
               ['📍', ticket.venue || ticket.event_venue || '—'],
               ['🎟️', tierLabel(ticket)],
-              ['💰', ticket.price ? `৳${Number(ticket.price).toLocaleString()}` : 'FREE'],
+              ['💰', ticket.price ? `৳${Number(ticket.price).toLocaleString()}` : '—'],
             ].map(([icon, val]) => (
               <span key={icon} style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', gap: '5px', alignItems: 'center' }}>
                 <span>{icon}</span><span>{val}</span>
@@ -89,11 +243,11 @@ function TicketCard({ ticket }) {
 
 export default function AudienceDashboard() {
   const { user } = useAuth();
-  const [tickets, setTickets]       = useState([]);
-  const [orders, setOrders]         = useState([]);
+  const [tickets,    setTickets]    = useState([]);
+  const [orders,     setOrders]     = useState([]);
   const [complaints, setComplaints] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [activeTab, setActiveTab]   = useState('tickets');
+  const [loading,    setLoading]    = useState(true);
+  const [activeTab,  setActiveTab]  = useState('tickets');
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refresh = () => setRefreshKey(k => k + 1);
@@ -101,24 +255,15 @@ export default function AudienceDashboard() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      api.get('/tickets/mine').catch(err => {
-        console.error('tickets/mine failed:', err.response?.status, err.response?.data || err.message);
-        return { data: {} };
-      }),
-      api.get('/marketplace/orders/mine').catch(err => {
-        console.error('orders/mine failed:', err.response?.status, err.response?.data || err.message);
-        return { data: [] };
-      }),
-      api.get('/complaints/mine').catch(err => {
-        console.error('complaints/mine failed:', err.response?.status, err.response?.data || err.message);
-        return { data: [] };
-      }),
+      api.get('/tickets/mine').catch(() => ({ data: {} })),
+      api.get('/marketplace/orders/mine').catch(() => ({ data: [] })),
+      api.get('/complaints/mine').catch(() => ({ data: [] })),
     ]).then(([t, o, c]) => {
       const purchases = t.data?.purchases || [];
       const ticketData = purchases.flatMap(group =>
         (group.tickets || []).map(ticket => ({
           ...ticket,
-          event_title:  group.event_title,   // ✅ correct key
+          event_title:  group.event_title,
           event_date:   group.event_date,
           event_time:   group.event_time,
           venue:        group.venue,
@@ -126,15 +271,9 @@ export default function AudienceDashboard() {
           banner_image: group.banner_image,
         }))
       );
-
-      const orderData = Array.isArray(o.data) ? o.data : (o.data?.orders || []);
-      // ✅ FIX: /complaints/mine returns array of complaint objects with
-      // text_content + media[] — not description/subject
-      const compData  = Array.isArray(c.data) ? c.data : [];
-
       setTickets(ticketData);
-      setOrders(orderData);
-      setComplaints(compData);
+      setOrders(Array.isArray(o.data) ? o.data : (o.data?.orders || []));
+      setComplaints(Array.isArray(c.data) ? c.data : []);
     }).finally(() => setLoading(false));
   }, [refreshKey]);
 
@@ -155,7 +294,7 @@ export default function AudienceDashboard() {
               <h1 style={{ fontFamily: 'var(--text-display)', fontSize: '22px', color: 'var(--cyan)', letterSpacing: '0.08em', textShadow: 'var(--cyan-glow)' }}>
                 MY DASHBOARD
               </h1>
-              <button onClick={refresh} title="Refresh data"
+              <button onClick={refresh}
                 style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.25)', borderRadius: '8px', color: 'var(--cyan)', cursor: 'pointer', padding: '6px 12px', fontSize: '16px' }}>
                 ⟳
               </button>
@@ -271,7 +410,6 @@ export default function AudienceDashboard() {
               )
 
             ) : (
-              /* COMPLAINTS — uses ComplaintCard, hides reporter (it's the user themselves) */
               complaints.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">📋</div>
@@ -284,9 +422,8 @@ export default function AudienceDashboard() {
                     <ComplaintCard
                       key={c.complaint_id || c.id}
                       complaint={c}
-                      showReporter={false}   // user is looking at their own complaints
+                      showReporter={false}
                       showEvent={true}
-                      isAdmin={false}
                     />
                   ))}
                 </div>
