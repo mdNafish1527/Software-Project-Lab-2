@@ -8,7 +8,6 @@ const TIER_NAMES = { 1: 'Standing', 2: 'Chair', 3: 'Sofa' };
 const TIER_FULL  = { 1: 'Standing — General', 2: 'Chair — Reserved', 3: 'Sofa — VIP' };
 const TIER_COLOR = { 1: 'var(--gold)', 2: 'var(--cyan)', 3: '#b040ff' };
 
-// ─── Surge reason → human label & color ──────────────────────────────────────
 const REASON_META = {
   last_chance:     { label: '🔥 LAST CHANCE',     color: '#ff3c3c', bg: 'rgba(255,60,60,0.12)',   border: 'rgba(255,60,60,0.4)'   },
   almost_sold_out: { label: '⚡ ALMOST GONE',      color: '#ff6b00', bg: 'rgba(255,107,0,0.1)',    border: 'rgba(255,107,0,0.4)'   },
@@ -16,14 +15,56 @@ const REASON_META = {
   selling_fast:    { label: '🚀 SELLING FAST',     color: '#00d4ff', bg: 'rgba(0,212,255,0.08)',   border: 'rgba(0,212,255,0.35)'  },
   elevated:        { label: '↑ IN DEMAND',         color: '#b040ff', bg: 'rgba(176,64,255,0.08)',  border: 'rgba(176,64,255,0.3)'  },
   standard:        { label: '✓ STANDARD PRICE',    color: '#00c878', bg: 'rgba(0,200,120,0.07)',   border: 'rgba(0,200,120,0.25)'  },
-  off:             { label: null,                   color: null,      bg: null,                     border: null                    },
-  inactive:        { label: null,                   color: null,      bg: null,                     border: null                    },
+  off:             { label: null, color: null, bg: null, border: null },
+  inactive:        { label: null, color: null, bg: null, border: null },
 };
 
-// ─── Animated price display ───────────────────────────────────────────────────
+// ── Adapter: converts /pricing/event/:id response → internal dynamicData shape ──
+function adaptPricingResponse(raw) {
+  if (!raw?.tiers) return null;
+
+  const tiersArray = [1, 2, 3]
+    .filter(n => raw.tiers[`tier${n}`] != null)
+    .map(n => {
+      const t = raw.tiers[`tier${n}`];
+      // compute multiplier from percentChange
+      const mult = t.priceChange === 'increased' ? 1 + (t.percentChange || 0) / 100
+                 : t.priceChange === 'decreased' ? 1 - (t.percentChange || 0) / 100
+                 : 1.0;
+      // pick a reason label
+      const demandRate = t.demandRate || 0;
+      const reason = t.priceChange === 'increased'
+        ? (demandRate > 0.85 ? 'last_chance' : demandRate > 0.7 ? 'almost_sold_out' : demandRate > 0.5 ? 'high_demand' : 'selling_fast')
+        : t.priceChange === 'stable' ? 'standard'
+        : 'off';
+
+      return {
+        tier:       n,
+        price:      t.dynamicPrice,
+        multiplier: mult,
+        reason,
+        factors: {
+          scarcity:  demandRate,
+          velocity:  0,
+          urgency:   0,
+          occupancy: demandRate,
+        },
+        remaining: t.remaining ?? null,
+      };
+    });
+
+  const anySurge = tiersArray.some(t => t.multiplier > 1.05);
+
+  return {
+    dynamic_enabled: anySurge,
+    tiers:           tiersArray,
+    computed_at:     raw.generated_at,
+  };
+}
+
 function AnimatedPrice({ price, prev, color }) {
   const [flash, setFlash] = useState(false);
-  const [dir,   setDir]   = useState(null); // 'up' | 'down' | null
+  const [dir,   setDir]   = useState(null);
 
   useEffect(() => {
     if (prev !== null && prev !== price) {
@@ -38,14 +79,11 @@ function AnimatedPrice({ price, prev, color }) {
 
   return (
     <div style={{
-      fontFamily:   'var(--text-display)',
-      fontSize:     '26px',
-      color:        flash ? flashColor : (color || 'var(--gold)'),
-      textShadow:   flash ? `0 0 16px ${flashColor}` : 'var(--gold-glow)',
-      transition:   'color 0.3s, text-shadow 0.3s',
-      display:      'flex',
-      alignItems:   'center',
-      gap:          '6px',
+      fontFamily: 'var(--text-display)', fontSize: '26px',
+      color: flash ? flashColor : (color || 'var(--gold)'),
+      textShadow: flash ? `0 0 16px ${flashColor}` : 'var(--gold-glow)',
+      transition: 'color 0.3s, text-shadow 0.3s',
+      display: 'flex', alignItems: 'center', gap: '6px',
     }}>
       ৳{price.toLocaleString()}
       {dir === 'up'   && <span style={{ fontSize: '14px', color: '#ff5050' }}>▲</span>}
@@ -54,18 +92,13 @@ function AnimatedPrice({ price, prev, color }) {
   );
 }
 
-// ─── Factor bar — shows scarcity/velocity/urgency contribution ───────────────
 function FactorBar({ label, value, max, color }) {
   const pct = Math.min(100, Math.round((value / max) * 100));
   return (
     <div style={{ marginBottom: '6px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-        <span style={{ fontFamily: 'var(--text-mono)', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.08em' }}>
-          {label}
-        </span>
-        <span style={{ fontFamily: 'var(--text-mono)', fontSize: '9px', color }}>
-          {(value * 100).toFixed(0)}%
-        </span>
+        <span style={{ fontFamily: 'var(--text-mono)', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.08em' }}>{label}</span>
+        <span style={{ fontFamily: 'var(--text-mono)', fontSize: '9px', color }}>{(value * 100).toFixed(0)}%</span>
       </div>
       <div style={{ height: '4px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '2px', transition: 'width 0.8s ease' }} />
@@ -74,42 +107,28 @@ function FactorBar({ label, value, max, color }) {
   );
 }
 
-// ─── Dynamic price tier card ──────────────────────────────────────────────────
-function DynamicTierCard({
-  tier, dynamicData, basePrice,
-  tierQty, onQtyChange, onAddToCart,
-  inCart, isAdded,
-}) {
+function DynamicTierCard({ tier, dynamicData, basePrice, tierQty, onQtyChange, onAddToCart, inCart, isAdded }) {
   const [showFactors, setShowFactors] = useState(false);
   const prevPrice = useRef(null);
 
-  const dp       = dynamicData;
-  const price    = dp ? dp.price : basePrice;
-  const mult     = dp ? dp.multiplier : 1.0;
-  const reason   = dp ? dp.reason : 'off';
-  const meta     = REASON_META[reason] || REASON_META.standard;
-  const isSurge  = mult > 1.05 && reason !== 'off';
-  const factors  = dp?.factors || {};
-  const color    = TIER_COLOR[tier.tierNum];
+  const dp      = dynamicData;
+  const price   = dp ? dp.price : basePrice;
+  const mult    = dp ? dp.multiplier : 1.0;
+  const reason  = dp ? dp.reason : 'off';
+  const meta    = REASON_META[reason] || REASON_META.standard;
+  const isSurge = mult > 1.05 && reason !== 'off';
+  const factors = dp?.factors || {};
+  const color   = TIER_COLOR[tier.tierNum];
 
-  useEffect(() => {
-    prevPrice.current = price;
-  });
+  useEffect(() => { prevPrice.current = price; });
   const prev = prevPrice.current;
 
   return (
     <div style={{
-      background:   'var(--bg-secondary)',
-      borderRadius: 'var(--radius-sm)',
-      padding:      '16px',
-      border:       inCart > 0
-        ? '1px solid rgba(0,212,255,0.3)'
-        : isSurge
-          ? `1px solid ${meta.border}`
-          : 'var(--border-dim)',
-      transition:   'border-color 0.4s',
+      background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', padding: '16px',
+      border: inCart > 0 ? '1px solid rgba(0,212,255,0.3)' : isSurge ? `1px solid ${meta.border}` : 'var(--border-dim)',
+      transition: 'border-color 0.4s',
     }}>
-      {/* Top row: name + surge badge */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
         <div>
           <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', color: 'var(--text-dim)', letterSpacing: '0.1em', marginBottom: '4px' }}>
@@ -122,26 +141,12 @@ function DynamicTierCard({
             </div>
           )}
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-          {/* Surge badge */}
           {meta.label && (
-            <div style={{
-              background:   meta.bg,
-              border:       `1px solid ${meta.border}`,
-              borderRadius: '20px',
-              padding:      '3px 9px',
-              fontFamily:   'var(--text-mono)',
-              fontSize:     '9px',
-              fontWeight:   '700',
-              color:        meta.color,
-              letterSpacing:'0.08em',
-              whiteSpace:   'nowrap',
-            }}>
+            <div style={{ background: meta.bg, border: `1px solid ${meta.border}`, borderRadius: '20px', padding: '3px 9px', fontFamily: 'var(--text-mono)', fontSize: '9px', fontWeight: '700', color: meta.color, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
               {meta.label}
             </div>
           )}
-          {/* Cart indicator */}
           {inCart > 0 && (
             <span style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--cyan)', background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.2)', borderRadius: '20px', padding: '2px 8px' }}>
               🛒 {inCart} in cart
@@ -150,23 +155,20 @@ function DynamicTierCard({
         </div>
       </div>
 
-      {/* Factors accordion — only when surge is active */}
       {isSurge && dp && (
         <div style={{ marginBottom: '10px' }}>
-          <button
-            onClick={() => setShowFactors(f => !f)}
+          <button onClick={() => setShowFactors(f => !f)}
             style={{ background: 'none', border: 'none', fontFamily: 'var(--text-mono)', fontSize: '9px', color: 'var(--text-dim)', cursor: 'pointer', padding: 0, letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: '4px' }}>
             {showFactors ? '▾' : '▸'} WHY THIS PRICE?
           </button>
-
           {showFactors && (
             <div style={{ marginTop: '10px', background: 'rgba(0,0,0,0.25)', borderRadius: '8px', padding: '12px' }}>
-              <FactorBar label="SCARCITY"      value={factors.scarcity  || 0} max={1.2} color="#ff6b00" />
-              <FactorBar label="DEMAND SPEED"  value={factors.velocity  || 0} max={0.6} color="#00d4ff" />
-              <FactorBar label="TIME URGENCY"  value={factors.urgency   || 0} max={0.5} color="#b040ff" />
+              <FactorBar label="SCARCITY"     value={factors.scarcity || 0} max={1.2} color="#ff6b00" />
+              <FactorBar label="DEMAND SPEED" value={factors.velocity || 0} max={0.6} color="#00d4ff" />
+              <FactorBar label="TIME URGENCY" value={factors.urgency  || 0} max={0.5} color="#b040ff" />
               <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)', fontFamily: 'var(--text-mono)', fontSize: '9px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
                 <div>{Math.round((factors.occupancy || 0) * 100)}% of seats sold</div>
-                <div>{dp.remaining} seats remaining</div>
+                {dp.remaining != null && <div>{dp.remaining} seats remaining</div>}
                 <div style={{ marginTop: '4px', color: 'var(--text-dim)', opacity: 0.6, fontSize: '8px' }}>
                   Prices refresh automatically · Algorithm: Aerodynamic Demand Pricing
                 </div>
@@ -176,30 +178,19 @@ function DynamicTierCard({
         </div>
       )}
 
-      {/* Qty + Add to cart */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        <button
-          onClick={() => onQtyChange(Math.max(1, tierQty - 1))}
-          style={{ width: '30px', height: '30px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '16px' }}>
-          −
-        </button>
-        <input
-          type="number" min={1} max={10} value={tierQty}
+        <button onClick={() => onQtyChange(Math.max(1, tierQty - 1))}
+          style={{ width: '30px', height: '30px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '16px' }}>−</button>
+        <input type="number" min={1} max={10} value={tierQty}
           onChange={e => onQtyChange(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
-          style={{ width: '44px', textAlign: 'center', background: 'var(--bg-primary,#040810)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: 'var(--text-primary)', padding: '5px', fontSize: '14px', fontWeight: '600', outline: 'none' }}
-        />
-        <button
-          onClick={() => onQtyChange(Math.min(10, tierQty + 1))}
-          style={{ width: '30px', height: '30px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '16px' }}>
-          +
-        </button>
-        <button
-          onClick={onAddToCart}
+          style={{ width: '44px', textAlign: 'center', background: 'var(--bg-primary,#040810)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: 'var(--text-primary)', padding: '5px', fontSize: '14px', fontWeight: '600', outline: 'none' }} />
+        <button onClick={() => onQtyChange(Math.min(10, tierQty + 1))}
+          style={{ width: '30px', height: '30px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '16px' }}>+</button>
+        <button onClick={onAddToCart}
           style={{ flex: 1, background: isAdded ? '#00BFA6' : `linear-gradient(135deg,${color}cc,${color}88)`, color: '#000', border: 'none', borderRadius: '8px', padding: '8px', fontWeight: '700', fontSize: '12px', cursor: 'pointer', fontFamily: 'var(--text-mono)', letterSpacing: '0.05em', transition: 'background 0.2s' }}>
           {isAdded ? '✅ Added!' : '+ ADD TO CART'}
         </button>
       </div>
-
       <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', marginTop: '6px' }}>
         Subtotal: ৳{(tierQty * price).toLocaleString()} · max 10
       </div>
@@ -207,7 +198,6 @@ function DynamicTierCard({
   );
 }
 
-// ─── Complaint Box ────────────────────────────────────────────────────────────
 function ComplaintBox({ eventId, hasTicket }) {
   const fileRef                     = useRef();
   const [text, setText]             = useState('');
@@ -324,23 +314,22 @@ function ComplaintBox({ eventId, hasTicket }) {
   );
 }
 
-// ─── Main ConcertDetail Page ──────────────────────────────────────────────────
 export default function ConcertDetail({ onOpenCart }) {
   const { id }   = useParams();
   const { user } = useAuth();
   const { addTicket, cartItems } = useCart();
 
-  const [event,        setEvent]        = useState(null);
-  const [tiers,        setTiers]        = useState([]);
-  const [dynamicData,  setDynamicData]  = useState(null);   // { dynamic_enabled, tiers[], computed_at }
-  const [hasTicket,    setHasTicket]    = useState(false);
-  const [loading,      setLoading]      = useState(true);
-  const [dpLoading,    setDpLoading]    = useState(false);
-  const [activeTab,    setActiveTab]    = useState('INFO');
-  const [alert,        setAlert]        = useState(null);
-  const [tierQty,      setTierQty]      = useState({ 1: 1, 2: 1, 3: 1 });
-  const [addedTier,    setAddedTier]    = useState(null);
-  const dpInterval                      = useRef(null);
+  const [event,       setEvent]       = useState(null);
+  const [tiers,       setTiers]       = useState([]);
+  const [dynamicData, setDynamicData] = useState(null);
+  const [hasTicket,   setHasTicket]   = useState(false);
+  const [loading,     setLoading]     = useState(true);
+  const [dpLoading,   setDpLoading]   = useState(false);
+  const [activeTab,   setActiveTab]   = useState('INFO');
+  const [alert,       setAlert]       = useState(null);
+  const [tierQty,     setTierQty]     = useState({ 1: 1, 2: 1, 3: 1 });
+  const [addedTier,   setAddedTier]   = useState(null);
+  const dpInterval                    = useRef(null);
 
   // ── Load event ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -361,22 +350,22 @@ export default function ConcertDetail({ onOpenCart }) {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // ── Fetch dynamic prices — then poll every 60 s ─────────────────────────────
+  // ── Fetch dynamic prices from /pricing/event/:id — poll every 60 s ──────────
   const fetchDynamicPrice = useCallback(() => {
     setDpLoading(true);
-    api.get(`/events/${id}/dynamic-price`)
-      .then(res => setDynamicData(res.data))
+    api.get(`/pricing/event/${id}`)                        // ✅ FIXED endpoint
+      .then(res => setDynamicData(adaptPricingResponse(res.data)))  // ✅ adapt shape
       .catch(() => {})
       .finally(() => setDpLoading(false));
   }, [id]);
 
   useEffect(() => {
     fetchDynamicPrice();
-    dpInterval.current = setInterval(fetchDynamicPrice, 60_000); // refresh every 60 s
+    dpInterval.current = setInterval(fetchDynamicPrice, 60_000);
     return () => clearInterval(dpInterval.current);
   }, [fetchDynamicPrice]);
 
-  // ── Check ticket ownership for complaint tab ────────────────────────────────
+  // ── Check ticket ownership ──────────────────────────────────────────────────
   useEffect(() => {
     if (!user || user.role !== 'audience') return;
     api.get('/tickets/mine')
@@ -392,11 +381,9 @@ export default function ConcertDetail({ onOpenCart }) {
     setTimeout(() => setAlert(null), 5000);
   };
 
-  // ── Look up dynamic price for a specific tier number ────────────────────────
   const getDynamicTier = (tierNum) =>
     dynamicData?.tiers?.find(t => t.tier === tierNum) || null;
 
-  // ── Effective price (dynamic if available, else base) ───────────────────────
   const effectivePrice = (tier) => {
     const dp = getDynamicTier(tier.tierNum);
     return dp ? dp.price : tier.price;
@@ -435,40 +422,21 @@ export default function ConcertDetail({ onOpenCart }) {
     return new Date(raw).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   };
 
-  // ── Dynamic pricing status banner for ticket panel ──────────────────────────
   const renderDpStatusBanner = () => {
-    if (!dynamicData) return null;
-    const { dynamic_enabled, computed_at } = dynamicData;
+    if (!dynamicData?.dynamic_enabled) return null;
+    const { computed_at } = dynamicData;
     const time = computed_at ? new Date(computed_at).toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit' }) : '';
-
-    if (!dynamic_enabled) return null;
-
-    const maxMult = Math.max(1, ...((dynamicData.tiers || []).map(t => t.multiplier || 1)));
+    const maxMult = Math.max(1, ...(dynamicData.tiers || []).map(t => t.multiplier || 1));
     const anySurge = maxMult > 1.05;
 
     return (
-      <div style={{
-        background:   anySurge ? 'rgba(255,107,0,0.07)' : 'rgba(176,64,255,0.06)',
-        border:       `1px solid ${anySurge ? 'rgba(255,107,0,0.3)' : 'rgba(176,64,255,0.25)'}`,
-        borderRadius: '8px',
-        padding:      '10px 14px',
-        marginBottom: '14px',
-        display:      'flex',
-        alignItems:   'center',
-        justifyContent: 'space-between',
-        gap:          '8px',
-        flexWrap:     'wrap',
-      }}>
+      <div style={{ background: anySurge ? 'rgba(255,107,0,0.07)' : 'rgba(176,64,255,0.06)', border: `1px solid ${anySurge ? 'rgba(255,107,0,0.3)' : 'rgba(176,64,255,0.25)'}`, borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
         <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: anySurge ? '#ff8c42' : '#b040ff', letterSpacing: '0.08em' }}>
           🧠 {anySurge ? `SURGE PRICING ACTIVE · ${maxMult.toFixed(2)}× peak` : 'AI PRICING ACTIVE'}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontFamily: 'var(--text-mono)', fontSize: '9px', color: 'var(--text-dim)' }}>
-            updated {time}
-          </span>
-          <button
-            onClick={fetchDynamicPrice}
-            disabled={dpLoading}
+          <span style={{ fontFamily: 'var(--text-mono)', fontSize: '9px', color: 'var(--text-dim)' }}>updated {time}</span>
+          <button onClick={fetchDynamicPrice} disabled={dpLoading}
             style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: 'var(--text-dim)', cursor: 'pointer', padding: '2px 8px', fontFamily: 'var(--text-mono)', fontSize: '9px' }}>
             {dpLoading ? '...' : '⟳'}
           </button>
@@ -517,7 +485,6 @@ export default function ConcertDetail({ onOpenCart }) {
       <div className="main-content">
         {alert && <div className={`alert alert-${alert.type}`} style={{ marginBottom: '20px' }}>{alert.text}</div>}
 
-        {/* Cart banner */}
         {totalInCart > 0 && (
           <div style={{ background: 'rgba(0,212,255,0.07)', border: '1px solid rgba(0,212,255,0.25)', borderRadius: '10px', padding: '12px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
             <span style={{ fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--cyan)' }}>
@@ -601,16 +568,13 @@ export default function ConcertDetail({ onOpenCart }) {
             </div>
           </div>
 
-          {/* Right: Dynamic ticket purchase panel */}
+          {/* Right: ticket purchase panel */}
           {user?.role === 'audience' && (
             <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,212,255,0.2)', borderTop: '2px solid var(--cyan)', borderRadius: 'var(--radius-lg)', padding: '24px', height: 'fit-content' }}>
               <div style={{ fontFamily: 'var(--text-mono)', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--cyan)', marginBottom: '16px' }}>
                 🎟️ Select Seat Type
               </div>
-
-              {/* Dynamic pricing status banner */}
               {renderDpStatusBanner()}
-
               {tiers.length === 0 ? (
                 <div style={{ fontFamily: 'var(--text-mono)', fontSize: '12px', color: 'var(--text-dim)' }}>No tickets available yet.</div>
               ) : (
@@ -628,14 +592,12 @@ export default function ConcertDetail({ onOpenCart }) {
                       isAdded={addedTier === tier.tierNum}
                     />
                   ))}
-
                   {totalInCart > 0 && (
                     <button onClick={onOpenCart}
                       style={{ display: 'block', width: '100%', background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', border: 'none', borderRadius: '10px', padding: '13px', fontWeight: '800', fontSize: '14px', cursor: 'pointer', fontFamily: 'var(--text-mono)', letterSpacing: '0.05em', textAlign: 'center' }}>
                       🛒 VIEW CART · ৳{totalTicketValue.toLocaleString()}
                     </button>
                   )}
-
                   <div style={{ fontFamily: 'var(--text-mono)', fontSize: '10px', color: 'var(--text-dim)', textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1.7 }}>
                     🔒 Secure checkout via cart<br />
                     {dynamicData?.dynamic_enabled
