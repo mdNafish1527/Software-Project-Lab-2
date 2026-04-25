@@ -1,93 +1,92 @@
 const express = require('express');
-const router = express.Router();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const router  = express.Router();
+const bcrypt  = require('bcryptjs');
+const jwt     = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const pool = require('../db');
+const pool    = require('../db');
 const { authenticate } = require('../middleware/auth');
 const {
-  sendOTPEmail, sendApprovalEmail, sendAdminInviteEmail,
-  sendPasswordResetEmail, sendPasswordChangedEmail,
+  sendOTPEmail,
+  sendApprovalEmail,
+  sendAdminInviteEmail,
+  sendPasswordResetEmail,
+  sendPasswordChangedEmail,
 } = require('../utils/email');
 
-const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+const generateOTP = () => Math.floor(100_000 + Math.random() * 900_000).toString();
 
-// Validate password strength
-const isStrongPassword = (pw) => {
-  return pw.length >= 8;
-};
+const isStrongPassword = (pw) => typeof pw === 'string' && pw.length >= 8;
 
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/auth/register
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
     const { username, email, password, role, profile_picture } = req.body;
 
     if (!username || !email || !password || !role)
-      return res.status(400).json({ message: 'All fields are required' });
+      return res.status(400).json({ message: 'username, email, password and role are all required' });
 
     if (!['audience', 'singer', 'organizer'].includes(role))
-      return res.status(400).json({ message: 'Invalid role' });
+      return res.status(400).json({ message: 'role must be audience, singer, or organizer' });
 
     if (!isStrongPassword(password))
       return res.status(400).json({ message: 'Password must be at least 8 characters' });
 
     if (['singer', 'organizer'].includes(role) && !profile_picture)
-      return res.status(400).json({ message: 'Profile picture is required for Singer/Organizer' });
+      return res.status(400).json({ message: 'A profile picture is required for Singer and Organizer accounts' });
 
-    // Check uniqueness
     const [existing] = await pool.query(
-      'SELECT u_id FROM USER WHERE email=? OR unique_username=?',
+      'SELECT u_id FROM `USER` WHERE email = ? OR unique_username = ?',
       [email, username]
     );
-    if (existing.length > 0)
-      return res.status(409).json({ message: 'Email or username already exists' });
+    if (existing.length)
+      return res.status(409).json({ message: 'Email or username already in use' });
 
     const hashedPw = await bcrypt.hash(password, 10);
 
-    // Insert user with pending status
     const [result] = await pool.query(
-      'INSERT INTO USER (unique_username, email, password, role, status, profile_picture) VALUES (?,?,?,?,?,?)',
+      'INSERT INTO `USER` (unique_username, email, password, role, status, profile_picture) VALUES (?,?,?,?,?,?)',
       [username, email, hashedPw, role, 'pending', profile_picture || null]
     );
 
-    // Generate and store OTP
-    const otp = generateOTP();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    // Generate OTP (5-minute expiry)
+    const otp       = generateOTP();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await pool.query(
-      'INSERT INTO OTP (email, otp_code, expires_at) VALUES (?,?,?)',
+      'INSERT INTO `OTP` (email, otp_code, expires_at) VALUES (?,?,?)',
       [email, otp, expiresAt]
     );
 
-    // Send OTP (also prints to console for dev)
     await sendOTPEmail(email, otp);
 
     res.status(201).json({
-      message: 'Registration successful! OTP sent to your email. Check the server terminal if email is not configured.',
-      u_id: result.insertId,
+      message: 'Registration successful! Check your email for the OTP.',
+      u_id:    result.insertId,
       role,
-      // In development, return OTP directly so frontend can show it
+      // Surface OTP in development so the app stays usable without email config
       dev_otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     });
   } catch (err) {
-    console.error('Register error:', err);
+    console.error('POST /auth/register:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/auth/verify-otp
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
-
     if (!email || !otp)
-      return res.status(400).json({ message: 'Email and OTP are required' });
+      return res.status(400).json({ message: 'email and otp are required' });
 
     const [rows] = await pool.query(
-      'SELECT * FROM OTP WHERE email=? AND used=FALSE ORDER BY created_at DESC LIMIT 1',
+      'SELECT * FROM `OTP` WHERE email = ? AND used = FALSE ORDER BY created_at DESC LIMIT 1',
       [email]
     );
-
-    if (rows.length === 0)
+    if (!rows.length)
       return res.status(400).json({ message: 'No OTP found for this email. Please register again.' });
 
     const record = rows[0];
@@ -98,57 +97,50 @@ router.post('/verify-otp', async (req, res) => {
     if (record.otp_code !== otp.toString())
       return res.status(400).json({ message: 'Incorrect OTP. Please try again.' });
 
-    // Mark OTP as used
-    await pool.query('UPDATE OTP SET used=TRUE WHERE id=?', [record.id]);
+    await pool.query('UPDATE `OTP` SET used = TRUE WHERE id = ?', [record.id]);
 
-    // Get user
-    const [users] = await pool.query('SELECT * FROM USER WHERE email=?', [email]);
-    if (users.length === 0)
-      return res.status(404).json({ message: 'User not found' });
+    const [users] = await pool.query('SELECT * FROM `USER` WHERE email = ?', [email]);
+    if (!users.length) return res.status(404).json({ message: 'User not found' });
 
     const user = users[0];
 
     if (user.role === 'audience') {
-      // Audience → activate immediately
-      await pool.query('UPDATE USER SET status=? WHERE email=?', ['active', email]);
-      return res.json({
-        message: 'Email verified! You can now log in.',
-        status: 'active',
-        role: user.role,
-      });
-    } else {
-      // Singer/Organizer → stays pending for admin review
-      return res.json({
-        message: 'Email verified! Your account is pending admin approval. We will contact you soon.',
-        status: 'pending',
-        role: user.role,
-      });
+      // Audience activates immediately
+      await pool.query("UPDATE `USER` SET status = 'active' WHERE email = ?", [email]);
+      return res.json({ message: 'Email verified! You can now log in.', status: 'active', role: user.role });
     }
+
+    // Singer / Organizer stays pending for admin approval
+    return res.json({
+      message: 'Email verified! Your account is pending admin approval.',
+      status:  'pending',
+      role:    user.role,
+    });
   } catch (err) {
-    console.error('Verify OTP error:', err);
+    console.error('POST /auth/verify-otp:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/auth/resend-otp
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/resend-otp', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ message: 'Email is required' });
+    if (!email) return res.status(400).json({ message: 'email is required' });
 
-    // Check user exists
-    const [users] = await pool.query('SELECT u_id FROM USER WHERE email=?', [email]);
-    if (users.length === 0)
+    const [users] = await pool.query('SELECT u_id FROM `USER` WHERE email = ?', [email]);
+    if (!users.length)
       return res.status(404).json({ message: 'No account found with this email' });
 
     // Invalidate old OTPs
-    await pool.query('UPDATE OTP SET used=TRUE WHERE email=?', [email]);
+    await pool.query('UPDATE `OTP` SET used = TRUE WHERE email = ?', [email]);
 
-    // Generate new OTP
-    const otp = generateOTP();
+    const otp       = generateOTP();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await pool.query(
-      'INSERT INTO OTP (email, otp_code, expires_at) VALUES (?,?,?)',
+      'INSERT INTO `OTP` (email, otp_code, expires_at) VALUES (?,?,?)',
       [email, otp, expiresAt]
     );
 
@@ -159,11 +151,14 @@ router.post('/resend-otp', async (req, res) => {
       dev_otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     });
   } catch (err) {
+    console.error('POST /auth/resend-otp:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/auth/login
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
@@ -171,25 +166,24 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Email/username and password are required' });
 
     const [users] = await pool.query(
-      'SELECT * FROM USER WHERE email=? OR unique_username=?',
+      'SELECT * FROM `USER` WHERE email = ? OR unique_username = ?',
       [identifier, identifier]
     );
-
-    if (users.length === 0)
+    if (!users.length)
       return res.status(401).json({ message: 'Invalid credentials' });
 
-    const user = users[0];
+    const user  = users[0];
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
     if (user.status === 'pending')
       return res.status(403).json({
-        message: 'Your account is under review. We will contact you soon.',
-        status: 'pending',
+        message: 'Your account is under review. We will contact you once approved.',
+        status:  'pending',
       });
 
     if (user.status === 'rejected')
-      return res.status(403).json({ message: 'Your account has been rejected. Contact support.' });
+      return res.status(403).json({ message: 'Your account has been rejected. Please contact support.' });
 
     const token = jwt.sign(
       { u_id: user.u_id, role: user.role, username: user.unique_username },
@@ -200,145 +194,185 @@ router.post('/login', async (req, res) => {
     res.json({
       token,
       user: {
-        u_id: user.u_id,
-        username: user.unique_username,
-        email: user.email,
-        role: user.role,
+        u_id:            user.u_id,
+        username:        user.unique_username,
+        email:           user.email,
+        role:            user.role,
         profile_picture: user.profile_picture,
-        status: user.status,
+        status:          user.status,
       },
     });
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('POST /auth/login:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/auth/forgot-password
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
-    const [users] = await pool.query('SELECT u_id FROM USER WHERE email=?', [email]);
-    if (users.length === 0)
+    if (!email) return res.status(400).json({ message: 'email is required' });
+
+    const [users] = await pool.query('SELECT u_id FROM `USER` WHERE email = ?', [email]);
+    if (!users.length)
       return res.status(404).json({ message: 'No account found with that email' });
 
-    await pool.query('UPDATE OTP SET used=TRUE WHERE email=?', [email]);
-    const otp = generateOTP();
+    await pool.query('UPDATE `OTP` SET used = TRUE WHERE email = ?', [email]);
+
+    const otp       = generateOTP();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-    await pool.query('INSERT INTO OTP (email, otp_code, expires_at) VALUES (?,?,?)', [email, otp, expiresAt]);
+    await pool.query(
+      'INSERT INTO `OTP` (email, otp_code, expires_at) VALUES (?,?,?)',
+      [email, otp, expiresAt]
+    );
+
     await sendPasswordResetEmail(email, otp);
 
     res.json({
-      message: 'OTP sent to your email.',
+      message: 'Password reset OTP sent to your email.',
       dev_otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     });
   } catch (err) {
+    console.error('POST /auth/forgot-password:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/auth/reset-password
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/reset-password', async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword)
+      return res.status(400).json({ message: 'email, otp and newPassword are required' });
+
     if (!isStrongPassword(newPassword))
       return res.status(400).json({ message: 'Password must be at least 8 characters' });
 
     const [rows] = await pool.query(
-      'SELECT * FROM OTP WHERE email=? AND used=FALSE ORDER BY created_at DESC LIMIT 1',
+      'SELECT * FROM `OTP` WHERE email = ? AND used = FALSE ORDER BY created_at DESC LIMIT 1',
       [email]
     );
-    if (rows.length === 0) return res.status(400).json({ message: 'No OTP found' });
+    if (!rows.length) return res.status(400).json({ message: 'No active OTP found' });
+
     const record = rows[0];
     if (new Date() > new Date(record.expires_at))
-      return res.status(400).json({ message: 'OTP expired' });
+      return res.status(400).json({ message: 'OTP has expired' });
     if (record.otp_code !== otp.toString())
       return res.status(400).json({ message: 'Incorrect OTP' });
 
-    await pool.query('UPDATE OTP SET used=TRUE WHERE id=?', [record.id]);
+    await pool.query('UPDATE `OTP` SET used = TRUE WHERE id = ?', [record.id]);
+
     const hashed = await bcrypt.hash(newPassword, 10);
-    await pool.query('UPDATE USER SET password=? WHERE email=?', [hashed, email]);
+    await pool.query('UPDATE `USER` SET password = ? WHERE email = ?', [hashed, email]);
     await sendPasswordChangedEmail(email);
 
     res.json({ message: 'Password reset successfully! You can now log in.' });
   } catch (err) {
+    console.error('POST /auth/reset-password:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// POST /api/auth/change-password (authenticated)
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/auth/change-password   (authenticated)
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/change-password', authenticate, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ message: 'currentPassword and newPassword are required' });
+
     if (!isStrongPassword(newPassword))
       return res.status(400).json({ message: 'New password must be at least 8 characters' });
 
-    const [users] = await pool.query('SELECT * FROM USER WHERE u_id=?', [req.user.u_id]);
-    const user = users[0];
-    const valid = await bcrypt.compare(currentPassword, user.password);
+    const [users] = await pool.query('SELECT * FROM `USER` WHERE u_id = ?', [req.user.u_id]);
+    if (!users.length) return res.status(404).json({ message: 'User not found' });
+
+    const valid = await bcrypt.compare(currentPassword, users[0].password);
     if (!valid) return res.status(400).json({ message: 'Current password is incorrect' });
 
     const hashed = await bcrypt.hash(newPassword, 10);
-    await pool.query('UPDATE USER SET password=? WHERE u_id=?', [hashed, req.user.u_id]);
-    await sendPasswordChangedEmail(user.email);
+    await pool.query('UPDATE `USER` SET password = ? WHERE u_id = ?', [hashed, req.user.u_id]);
+    await sendPasswordChangedEmail(users[0].email);
 
     res.json({ message: 'Password changed successfully!' });
   } catch (err) {
+    console.error('POST /auth/change-password:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// POST /api/auth/invite-admin
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/auth/invite-admin   (admin only)
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/invite-admin', authenticate, async (req, res) => {
   try {
     if (req.user.role !== 'admin')
       return res.status(403).json({ message: 'Only admins can send invitations' });
 
     const { email } = req.body;
-    const token = uuidv4();
+    if (!email) return res.status(400).json({ message: 'email is required' });
+
+    const token     = uuidv4();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     await pool.query(
-      'INSERT INTO ADMIN_INVITATION (token, invited_by, email, expires_at) VALUES (?,?,?,?)',
+      'INSERT INTO `ADMIN_INVITATION` (token, invited_by, email, expires_at) VALUES (?,?,?,?)',
       [token, req.user.u_id, email, expiresAt]
     );
     await sendAdminInviteEmail(email, token);
+
     res.json({ message: 'Admin invitation sent!', token });
   } catch (err) {
+    console.error('POST /auth/invite-admin:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/auth/register-admin
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/register-admin', async (req, res) => {
   try {
     const { token, username, email, password } = req.body;
+    if (!token || !username || !email || !password)
+      return res.status(400).json({ message: 'token, username, email and password are required' });
+
     const [invites] = await pool.query(
-      'SELECT * FROM ADMIN_INVITATION WHERE token=? AND used=FALSE',
+      'SELECT * FROM `ADMIN_INVITATION` WHERE token = ? AND used = FALSE',
       [token]
     );
-    if (invites.length === 0)
-      return res.status(400).json({ message: 'Invalid or already used invitation' });
+    if (!invites.length)
+      return res.status(400).json({ message: 'Invalid or already used invitation link' });
 
-    const invite = invites[0];
-    if (new Date() > new Date(invite.expires_at))
-      return res.status(400).json({ message: 'Invitation has expired' });
+    if (new Date() > new Date(invites[0].expires_at))
+      return res.status(400).json({ message: 'Invitation link has expired' });
 
     const [existing] = await pool.query(
-      'SELECT u_id FROM USER WHERE email=? OR unique_username=?',
+      'SELECT u_id FROM `USER` WHERE email = ? OR unique_username = ?',
       [email, username]
     );
-    if (existing.length > 0)
-      return res.status(409).json({ message: 'Email or username already exists' });
+    if (existing.length)
+      return res.status(409).json({ message: 'Email or username already in use' });
+
+    if (!isStrongPassword(password))
+      return res.status(400).json({ message: 'Password must be at least 8 characters' });
 
     const hashed = await bcrypt.hash(password, 10);
     await pool.query(
-      'INSERT INTO USER (unique_username, email, password, role, status) VALUES (?,?,?,?,?)',
-      [username, email, hashed, 'admin', 'active']
+      "INSERT INTO `USER` (unique_username, email, password, role, status) VALUES (?,?,?,'admin','active')",
+      [username, email, hashed]
     );
-    await pool.query('UPDATE ADMIN_INVITATION SET used=TRUE WHERE token=?', [token]);
+    await pool.query('UPDATE `ADMIN_INVITATION` SET used = TRUE WHERE token = ?', [token]);
 
     res.json({ message: 'Admin account created! You can now log in.' });
   } catch (err) {
+    console.error('POST /auth/register-admin:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
