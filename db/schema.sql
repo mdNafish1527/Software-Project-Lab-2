@@ -183,18 +183,39 @@ CREATE TABLE IF NOT EXISTS ORDER_ITEM (
     FOREIGN KEY (item_id) REFERENCES ITEM(item_id)
 );
 
--- COMPLAINT TABLE
-CREATE TABLE IF NOT EXISTS Complaint (
-    complaint_id INT AUTO_INCREMENT PRIMARY KEY,
-    u_id INT NOT NULL,
-    event_id INT NOT NULL,
-    suspect_u_id INT,
-    description TEXT NOT NULL,
-    evidence VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (u_id) REFERENCES USER(u_id),
-    FOREIGN KEY (event_id) REFERENCES EVENT(event_id),
-    FOREIGN KEY (suspect_u_id) REFERENCES USER(u_id)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- COMPLAINT TABLE  (replaces old Complaint table)
+-- buyer_id  = the audience member who submits
+-- media     = JSON array of { type, url, name, size } objects
+-- status    = workflow: pending → reviewed → resolved / dismissed
+-- admin_note= admin's internal note when resolving/dismissing
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS `COMPLAINT` (
+    complaint_id  INT AUTO_INCREMENT PRIMARY KEY,
+    event_id      INT          NOT NULL,
+    buyer_id      INT          NOT NULL,
+    text_content  TEXT,
+    media         JSON,                          -- array of file objects
+    status        ENUM('pending','reviewed','resolved','dismissed') NOT NULL DEFAULT 'pending',
+    admin_note    TEXT,
+    created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id)  REFERENCES EVENT(event_id) ON DELETE CASCADE,
+    FOREIGN KEY (buyer_id)  REFERENCES USER(u_id)      ON DELETE CASCADE
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- EVENT_COMPLAINT_QR TABLE
+-- Each organizer can generate ONE complaint-QR per event.
+-- When an audience member scans it they land on /complaint-form?token=<token>
+-- token     = unique UUID, never changes per event
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS EVENT_COMPLAINT_QR (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    event_id    INT          NOT NULL UNIQUE,    -- one QR per event
+    token       VARCHAR(255) NOT NULL UNIQUE,    -- UUID used in the public URL
+    qr_image    TEXT,                            -- base64 PNG of the QR code
+    created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES EVENT(event_id) ON DELETE CASCADE
 );
 
 -- CART TABLE
