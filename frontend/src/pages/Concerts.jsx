@@ -3,7 +3,6 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
-// Seat type names — maps DB tier number to display label
 const TIER_NAMES = { 1: 'Chair', 2: 'Standing', 3: 'Sofa' };
 
 function formatDate(dateStr) {
@@ -68,7 +67,8 @@ function PriceBadge({ tierColor, pricing, basePrice, loading }) {
   );
 }
 
-function ConcertCard({ event, onClick }) {
+// ✅ pricingReady flag prevents showing stale base prices before dynamic prices arrive
+function ConcertCard({ event, pricing, pricingReady, onClick }) {
   return (
     <div
       onClick={onClick}
@@ -106,18 +106,59 @@ function ConcertCard({ event, onClick }) {
           {event.organizer_name && <div style={{ fontSize: '12px', color: '#4A5A72' }}>🏢 {event.organizer_name}</div>}
         </div>
 
-        {/* Seat type price pills — Chair / Standing / Sofa */}
+        {/* Seat type price pills — show dynamic price if available, shimmer while loading */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
           {[
             { n: 1, color: '#D4A853' }, { n: 2, color: '#00BFA6' }, { n: 3, color: '#b040ff' }
-          ].filter(t => event[`tier${t.n}_quantity`] > 0).map(t => (
-            <div key={t.n} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '6px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: '9px', color: '#8B9BB4', textTransform: 'uppercase' }}>{TIER_NAMES[t.n]}</div>
-              <div style={{ fontSize: '14px', fontWeight: '700', color: t.color }}>
-                ৳{event[`tier${t.n}_price`]}
+          ].filter(t => event[`tier${t.n}_quantity`] > 0).map(t => {
+            const tierPricing  = pricing?.[`tier${t.n}`];
+            const dynamicPrice = tierPricing?.dynamicPrice;
+            const basePrice    = event[`tier${t.n}_price`];
+            const displayPrice = dynamicPrice || basePrice;
+            const isSurge      = dynamicPrice && dynamicPrice > basePrice;
+            const isDiscount   = dynamicPrice && dynamicPrice < basePrice;
+            return (
+              <div key={t.n} style={{
+                background: 'rgba(255,255,255,0.05)',
+                border: `1px solid ${isSurge ? t.color + '66' : isDiscount ? '#00BFA666' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: '8px', padding: '6px 12px', textAlign: 'center',
+                position: 'relative', overflow: 'hidden',
+              }}>
+                <div style={{ fontSize: '9px', color: '#8B9BB4', textTransform: 'uppercase' }}>{TIER_NAMES[t.n]}</div>
+
+                {/* Price shimmer while bulk pricing is loading */}
+                {!pricingReady ? (
+                  <div style={{
+                    height: '20px', width: '60px', borderRadius: '4px',
+                    background: 'linear-gradient(90deg,rgba(255,255,255,0.05) 25%,rgba(255,255,255,0.12) 50%,rgba(255,255,255,0.05) 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.2s infinite',
+                    margin: '2px auto',
+                  }} />
+                ) : (
+                  <>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: t.color }}>
+                      ৳{Number(displayPrice).toLocaleString()}
+                    </div>
+                    {isSurge && (
+                      <div style={{ fontSize: '8px', color: '#FF5252', fontWeight: '700' }}>▲</div>
+                    )}
+                    {isDiscount && (
+                      <div style={{ fontSize: '8px', color: '#00BFA6', fontWeight: '700' }}>▼ deal</div>
+                    )}
+                    {!isSurge && !isDiscount && dynamicPrice && (
+                      <div style={{ fontSize: '8px', color: '#4A5A72' }}></div>
+                    )}
+                  </>
+                )}
+
+                {/* AI badge — only shown once pricing is ready */}
+                {pricingReady && tierPricing && (
+                  <div style={{ fontSize: '8px', color: '#b040ff', fontStyle: 'italic', marginTop: '1px' }}></div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <button style={{ width: '100%', background: 'linear-gradient(135deg,#D4A853,#B8922E)', color: '#000', border: 'none', borderRadius: '8px', padding: '10px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', fontFamily: '"Exo 2",sans-serif' }}>
@@ -134,18 +175,19 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
   const [selectedTier, setSelectedTier] = useState(null);
   const [ticketQty, setTicketQty]       = useState(1);
   const [addedMsg, setAddedMsg]         = useState('');
-
   const [dynamicPricing, setDynamicPricing] = useState({});
   const [priceLoading, setPriceLoading]     = useState(true);
 
+  const eventId = event?.event_id || event?.id;
+
   useEffect(() => {
-    if (!event?.id) return;
+    if (!eventId) return;
     setPriceLoading(true);
-    api.get(`/pricing/event/${event.id}`)
+    api.get(`/pricing/event/${eventId}`)
       .then(r => { setDynamicPricing(r.data?.tiers || {}); })
       .catch(() => setDynamicPricing({}))
       .finally(() => setPriceLoading(false));
-  }, [event?.id]);
+  }, [eventId]);
 
   if (!event) return null;
 
@@ -165,7 +207,6 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
 
   const handleAddToCart = () => {
     if (!user) { window.location.href = '/login'; return; }
-    // Pass tierNum explicitly so CartContext maps 'Chair' → 1, etc. correctly
     addTicket(event, { label: selectedTier.label, tierNum: selectedTier.n, price: selectedTier.price }, ticketQty);
     setAddedMsg(`✅ ${ticketQty}× ${selectedTier.label} added to cart at ৳${selectedTier.price}!`);
     setTimeout(() => setAddedMsg(''), 3000);
@@ -218,8 +259,8 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
                   🎟️ Select Seat Type
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(176,64,255,0.1)', border: '1px solid rgba(176,64,255,0.25)', borderRadius: '20px', padding: '3px 10px' }}>
-                  <span style={{ fontSize: '9px' }}>🧠</span>
-                  <span style={{ fontSize: '9px', color: '#b040ff', fontWeight: '700', letterSpacing: '0.1em' }}>BAYESIAN DYNAMIC PRICING</span>
+                  <span style={{ fontSize: '9px' }}></span>
+                  <span style={{ fontSize: '9px', color: '#b040ff', fontWeight: '700', letterSpacing: '0.1em' }}></span>
                 </div>
                 {priceLoading && (
                   <div style={{ width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.1)', borderTopColor: '#D4A853', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
@@ -228,7 +269,7 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
 
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 {tiers.map(tier => {
-                  const inCart   = getTicketInCart(event.id, tier.n);
+                  const inCart   = getTicketInCart(eventId, tier.n);
                   const selected = selectedTier?.n === tier.n;
                   return (
                     <div
@@ -236,7 +277,6 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
                       onClick={() => { setSelectedTier(tier); setTicketQty(1); }}
                       style={{ background: selected ? `${tier.color}20` : `${tier.color}08`, border: `1px solid ${selected ? tier.color : tier.color + '44'}`, borderRadius: '12px', padding: '14px 18px', cursor: 'pointer', transition: 'all 0.2s', flex: 1, minWidth: '120px', position: 'relative' }}
                     >
-                      {/* Chair / Standing / Sofa label */}
                       <div style={{ fontSize: '11px', color: '#4A5A72', marginBottom: '6px' }}>{TIER_NAMES[tier.n]}</div>
                       <PriceBadge tierColor={tier.color} pricing={tier.pricing} basePrice={tier.basePrice} loading={priceLoading} />
                       <div style={{ fontSize: '11px', color: '#4A5A72', marginTop: '6px' }}>{tier.qty} seats</div>
@@ -250,8 +290,7 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
               <div style={{ marginTop: '10px', background: 'rgba(176,64,255,0.06)', border: '1px solid rgba(176,64,255,0.15)', borderRadius: '8px', padding: '10px 14px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                 <span style={{ fontSize: '14px' }}>🧠</span>
                 <div style={{ fontSize: '11px', color: '#4A5A72', lineHeight: '1.6' }}>
-                  Prices are adjusted in real-time using a <span style={{ color: '#b040ff' }}>Bayesian Beta-Binomial demand model</span>.
-                  Prices rise as seats fill up or the event date approaches.
+                  Prices are adjusted in real-time using AI. Prices rise as seats fill up or the event date approaches.
                 </div>
               </div>
             </div>
@@ -293,7 +332,6 @@ function ConcertModal({ event, user, onClose, onOpenCart }) {
                   style={{ flex: 2, background: `linear-gradient(135deg,${selectedTier.color},${selectedTier.color}cc)`, color: selectedTier.color === '#D4A853' ? '#000' : '#fff', border: 'none', borderRadius: '10px', padding: '13px', fontWeight: '800', fontSize: '14px', cursor: 'pointer', fontFamily: '"Exo 2",sans-serif' }}>
                   {!user ? '🔐 Login to Add' : `🛒 ADD TO CART · ৳${(selectedTier.price * ticketQty).toLocaleString()}`}
                 </button>
-                {/* FIX: View Cart does NOT call handleAddToCart — prevents double-add */}
                 <button
                   onClick={() => { onClose(); onOpenCart(); }}
                   style={{ flex: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', padding: '13px', color: '#EEF2FF', cursor: 'pointer', fontFamily: '"Exo 2",sans-serif', fontSize: '12px', fontWeight: '600' }}>
@@ -324,6 +362,8 @@ export default function Concerts({ onOpenCart }) {
   const [pagination, setPagination]       = useState({});
   const [heroIdx, setHeroIdx]             = useState(0);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [pricingData, setPricingData]     = useState({});
+  const [pricingReady, setPricingReady]   = useState(false); // ✅ NEW: track when bulk pricing has arrived
 
   useEffect(() => {
     api.get('/events/featured')
@@ -344,16 +384,25 @@ export default function Concerts({ onOpenCart }) {
 
   const loadEvents = async (p = 1) => {
     setLoading(true);
+    setPricingReady(false); // ✅ reset pricing state on each load
     try {
       const params = new URLSearchParams({ page: p, limit: 12 });
       if (search) params.append('search', search);
       const res = await api.get(`/events?${params}`);
       const raw = res.data.events || [];
-      // Client-side guard: only live + launched
       setEvents(raw.filter(ev => ev.status === 'live' && ev.launch));
       setPagination(res.data.pagination || {});
       setPage(p);
-    } catch { setEvents([]); }
+      // ✅ fetch bulk dynamic prices — set pricingReady only after this resolves
+      api.get('/pricing/events')
+        .then(r => {
+          setPricingData(r.data?.pricing || {});
+          setPricingReady(true); // ✅ NOW cards will show dynamic prices
+        })
+        .catch(() => {
+          setPricingReady(true); // ✅ even on failure, unblock cards (they'll show base price)
+        });
+    } catch { setEvents([]); setPricingReady(true); }
     finally { setLoading(false); }
   };
 
@@ -443,7 +492,13 @@ export default function Concerts({ onOpenCart }) {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: '24px' }}>
             {events.map(event => (
-              <ConcertCard key={event.id} event={event} onClick={() => setSelectedEvent(event)} />
+              <ConcertCard
+                key={event.event_id || event.id}
+                event={event}
+                pricing={pricingData[event.event_id] || pricingData[event.id] || {}}
+                pricingReady={pricingReady}
+                onClick={() => setSelectedEvent(event)}
+              />
             ))}
           </div>
         )}
@@ -459,7 +514,13 @@ export default function Concerts({ onOpenCart }) {
         )}
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes shimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
     </div>
   );
 }
