@@ -2,8 +2,11 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
 const { authenticate } = require('../middleware/auth');
+const { computeDynamicPrice } = require('../utils/dynamicPricing');
 
-// ─── POST /api/tickets/buy ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/tickets/buy
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/buy', authenticate, async (req, res) => {
   const { event_id, tier, quantity = 1, transaction_id } = req.body;
   const buyer_id = req.user.u_id;
@@ -16,22 +19,21 @@ router.post('/buy', authenticate, async (req, res) => {
     return res.status(400).json({ message: 'tier must be 1, 2, or 3' });
 
   const qty = parseInt(quantity);
-  if (qty < 1 || qty > 10)
+  if (isNaN(qty) || qty < 1 || qty > 10)
     return res.status(400).json({ message: 'Quantity must be between 1 and 10' });
 
   try {
-    // Count tickets this buyer already holds for this event (all tiers)
+    // How many tickets does this buyer already hold for this event?
     const [[{ existing }]] = await db.query(
       'SELECT COUNT(*) AS existing FROM `TICKET` WHERE event_id = ? AND buyer_id = ?',
       [event_id, buyer_id]
     );
-
     if (Number(existing) + qty > 10)
       return res.status(400).json({
-        message: `You already have ${existing} ticket(s). Max 10 per person. You can buy at most ${10 - existing} more.`,
+        message: `You already have ${existing} ticket(s) for this event. Max 10 per person — you can buy at most ${10 - existing} more.`,
       });
 
-    // Fetch event
+    // Fetch the event and the chosen tier's price + capacity in one query
     const [[event]] = await db.query(
       `SELECT event_id, status, launch,
               tier${tierNum}_price    AS tier_price,
@@ -39,31 +41,33 @@ router.post('/buy', authenticate, async (req, res) => {
        FROM \`EVENT\` WHERE event_id = ?`,
       [event_id]
     );
-
     if (!event)
       return res.status(404).json({ message: 'Event not found' });
-
     if (event.status !== 'live' || !event.launch)
-      return res.status(400).json({ message: 'This event is not available for ticket purchases' });
-
+      return res.status(400).json({ message: 'This event is not currently available for ticket purchases' });
     if (!event.tier_capacity || Number(event.tier_capacity) === 0)
       return res.status(400).json({ message: `Tier ${tierNum} is not available for this event` });
-
     if (Number(event.tier_price) === 0)
-      return res.status(400).json({ message: 'Free tickets are not available on this platform' });
+      return res.status(400).json({ message: 'Free tickets are not supported on this platform' });
 
-    // Count already sold seats in this tier
+    // How many seats already sold in this tier?
     const [[{ soldInTier }]] = await db.query(
       'SELECT COUNT(*) AS soldInTier FROM `TICKET` WHERE event_id = ? AND tier = ?',
       [event_id, tierNum]
     );
-
-    if (Number(soldInTier) + qty > Number(event.tier_capacity))
+    const remaining = Number(event.tier_capacity) - Number(soldInTier);
+    if (qty > remaining)
       return res.status(400).json({
-        message: `Not enough seats in Tier ${tierNum}. Only ${event.tier_capacity - soldInTier} remaining.`,
+        message: `Not enough seats in Tier ${tierNum}. Only ${remaining} remaining.`,
       });
+    const { dynamicPrice } = computeDynamicPrice(
+      Number(event.tier_price),
+      Number(soldInTier),
+      Number(event.tier_capacity),
+      event.date
+    );
 
-    // Build ticket rows — unique QR per ticket
+    // Build unique QR codes for each ticket
     const ticketValues = Array.from({ length: qty }, () => {
       const qr = `GB-${Date.now()}-${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
       return [event_id, buyer_id, tierNum, Number(event.tier_price), qr, 0];
@@ -78,7 +82,7 @@ router.post('/buy', authenticate, async (req, res) => {
       message:        `Successfully purchased ${qty} ticket(s)!`,
       quantity:       qty,
       tier:           tierNum,
-      total_paid:     Number(event.tier_price) * qty,
+      total_paid:     dynamicPrice * qty,
       transaction_id: transaction_id || null,
     });
   } catch (err) {
@@ -87,28 +91,27 @@ router.post('/buy', authenticate, async (req, res) => {
   }
 });
 
-// ─── GET /api/tickets/mine ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/tickets/mine   (audience — their tickets grouped by event)
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/mine', authenticate, async (req, res) => {
   try {
     const [tickets] = await db.query(
-      `SELECT t.ticket_id, t.tier, t.price, t.used,
-              t.purchased_at,                          -- ✅ FIX: use actual column name from schema
-              t.qr_code,
+      `SELECT t.ticket_id, t.tier, t.price, t.used, t.purchased_at, t.qr_code,
               e.event_id, e.title AS event_title,
-              e.date AS event_date, e.time AS event_time,
-              e.venue, e.city,
-              e.poster AS banner_image,
+              e.date  AS event_date, e.time AS event_time,
+              e.venue, e.city, e.poster AS banner_image,
               e.status AS event_status,
               s.unique_username AS singer_name
        FROM \`TICKET\` t
-       JOIN \`EVENT\` e ON t.event_id = e.event_id
+       JOIN \`EVENT\` e  ON t.event_id  = e.event_id
        LEFT JOIN \`USER\` s ON e.singer_id = s.u_id
        WHERE t.buyer_id = ?
        ORDER BY t.purchased_at DESC`,
       [req.user.u_id]
     );
 
-    // Group tickets by event for cleaner frontend rendering
+    // Group by event for cleaner frontend rendering
     const grouped = {};
     for (const t of tickets) {
       if (!grouped[t.event_id]) {
@@ -145,7 +148,9 @@ router.get('/mine', authenticate, async (req, res) => {
   }
 });
 
-// ─── POST /api/tickets/scan ───────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/tickets/scan   (organizer — validate & mark QR at venue)
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/scan', authenticate, async (req, res) => {
   try {
     const { qr_code } = req.body;
@@ -171,12 +176,12 @@ router.post('/scan', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'This ticket does not belong to your event' });
 
     if (ticket.used)
-      return res.status(400).json({ message: 'Ticket already used', ticket });
+      return res.status(400).json({ message: 'Ticket has already been used', ticket });
 
     await db.query('UPDATE `TICKET` SET used = 1 WHERE ticket_id = ?', [ticket.ticket_id]);
 
     res.json({
-      message:     'Ticket is valid ✓',
+      message:     '✓ Ticket is valid',
       ticket_id:   ticket.ticket_id,
       tier:        ticket.tier,
       event_title: ticket.event_title,
