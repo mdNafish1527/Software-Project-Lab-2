@@ -41,7 +41,7 @@ export default function AdminDashboard() {
     Promise.all([
       api.get('/users/pending').catch(() => ({ data: [] })),
       api.get('/users/all').catch(() => ({ data: [] })),
-      api.get('/complaints').catch(() => ({ data: [] })),
+      api.get('/complaints/admin/all').catch(() => ({ data: [] })),
       api.get('/events').catch(() => ({ data: { events: [] } })),
     ]).then(([p, u, c, e]) => {
       // /users/pending → array directly
@@ -342,7 +342,7 @@ export default function AdminDashboard() {
                           </span>
                         </div>
                         <div style={{ fontFamily: 'var(--text-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '10px' }}>
-                          {c.description}
+                           {c.text_content}
                         </div>
                         {(!c.status || c.status === 'pending') && (
                           <div style={{ display: 'flex', gap: '8px' }}>
