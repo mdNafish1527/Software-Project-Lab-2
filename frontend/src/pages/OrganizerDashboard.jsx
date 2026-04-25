@@ -3,12 +3,9 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
 
-const getTierLabel = (n) => {
-  if (n === 1) return 'Standing';
-  if (n === 2) return 'Chair';
-  if (n === 3) return 'Sofa';
-  return `Tier ${n}`;
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const TIER_NAMES = { 1: 'Standing', 2: 'Chair', 3: 'Sofa' };
+const getTierLabel = (n) => TIER_NAMES[n] || `Tier ${n}`;
 
 const STATUS_COLOR = {
   pending:   '#D4A853',
@@ -25,19 +22,19 @@ function formatDate(d) {
 
 // ─── Ticket Sales Modal ───────────────────────────────────────────────────────
 function TicketSalesModal({ eventId, eventTitle, onClose }) {
-  const [data, setData]       = useState(null);
+  const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.get(`/events/${eventId}/ticket-sales`)
-      .then(r => setData(r.data))
+      .then(r  => setData(r.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [eventId]);
 
   return (
     <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(6px)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px' }} onClick={onClose}>
-      <div style={{ background:'var(--bg-card)',border:'1px solid rgba(212,168,83,0.25)',borderRadius:'var(--radius-lg)',maxWidth:'700px',width:'100%',maxHeight:'85vh',overflowY:'auto',padding:'28px' }} onClick={e=>e.stopPropagation()}>
+      <div style={{ background:'var(--bg-card)',border:'1px solid rgba(212,168,83,0.25)',borderRadius:'var(--radius-lg)',maxWidth:'700px',width:'100%',maxHeight:'85vh',overflowY:'auto',padding:'28px' }} onClick={e => e.stopPropagation()}>
         <div className="flex-between" style={{ marginBottom:'20px' }}>
           <div>
             <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',letterSpacing:'0.15em',marginBottom:'4px' }}>TICKET SALES REPORT</div>
@@ -54,9 +51,9 @@ function TicketSalesModal({ eventId, eventTitle, onClose }) {
           <>
             <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px',marginBottom:'24px' }}>
               {[
-                { label:'Total Sold',    value:data.totalSold,                                   icon:'🎟️', color:'var(--cyan)' },
-                { label:'Total Revenue', value:`৳${Number(data.totalRevenue).toLocaleString()}`, icon:'💰', color:'var(--gold)' },
-                { label:'Sections',      value:data.tiers.length,                                icon:'🏷️', color:'#b040ff'    },
+                { label:'Total Sold',    value: data.totalSold,                                    icon:'🎟️', color:'var(--cyan)' },
+                { label:'Total Revenue', value: `৳${Number(data.totalRevenue).toLocaleString()}`,  icon:'💰', color:'var(--gold)' },
+                { label:'Sections',      value: data.tiers.length,                                 icon:'🏷️', color:'#b040ff'    },
               ].map(s => (
                 <div key={s.label} style={{ background:'var(--bg-secondary)',border:'var(--border-dim)',borderRadius:'var(--radius-sm)',padding:'14px',textAlign:'center' }}>
                   <div style={{ fontSize:'22px',marginBottom:'4px' }}>{s.icon}</div>
@@ -68,7 +65,7 @@ function TicketSalesModal({ eventId, eventTitle, onClose }) {
 
             {data.tiers.map(t => {
               const pct   = t.capacity > 0 ? Math.round((t.sold / t.capacity) * 100) : 0;
-              const color = t.tier===1 ? 'var(--gold)' : t.tier===2 ? 'var(--cyan)' : '#b040ff';
+              const color = t.tier === 1 ? 'var(--gold)' : t.tier === 2 ? 'var(--cyan)' : '#b040ff';
               return (
                 <div key={t.tier} style={{ background:'var(--bg-secondary)',border:'var(--border-dim)',borderRadius:'var(--radius-sm)',padding:'14px',marginBottom:'10px' }}>
                   <div className="flex-between" style={{ marginBottom:'8px' }}>
@@ -99,7 +96,7 @@ function TicketSalesModal({ eventId, eventTitle, onClose }) {
                       {data.recentPurchases.map(p => (
                         <tr key={p.ticket_id}>
                           <td style={{ fontFamily:'var(--text-mono)',fontSize:'12px' }}>{p.buyer}</td>
-                          <td><span style={{ color:p.tier===1?'var(--gold)':p.tier===2?'var(--cyan)':'#b040ff',fontFamily:'var(--text-mono)',fontSize:'12px' }}>{getTierLabel(p.tier)}</span></td>
+                          <td><span style={{ color: p.tier===1?'var(--gold)':p.tier===2?'var(--cyan)':'#b040ff', fontFamily:'var(--text-mono)',fontSize:'12px' }}>{getTierLabel(p.tier)}</span></td>
                           <td style={{ color:'var(--gold)',fontFamily:'var(--text-display)',fontSize:'13px' }}>৳{Number(p.price).toLocaleString()}</td>
                           <td style={{ fontFamily:'var(--text-mono)',fontSize:'11px',color:'var(--text-dim)' }}>{formatDate(p.purchased_at)}</td>
                           <td><span className={`badge ${p.used ? 'badge-gold' : 'badge-green'}`}>{p.used ? 'USED' : 'VALID'}</span></td>
@@ -121,12 +118,12 @@ function TicketSalesModal({ eventId, eventTitle, onClose }) {
 function EditPricesModal({ event, onClose, onSaved }) {
   const id = event.event_id || event.id;
   const [form, setForm] = useState({
-    tier1_price: event.tier1_price||'', tier1_quantity: event.tier1_quantity||'',
-    tier2_price: event.tier2_price||'', tier2_quantity: event.tier2_quantity||'',
-    tier3_price: event.tier3_price||'', tier3_quantity: event.tier3_quantity||'',
+    tier1_price: event.tier1_price || '', tier1_quantity: event.tier1_quantity || '',
+    tier2_price: event.tier2_price || '', tier2_quantity: event.tier2_quantity || '',
+    tier3_price: event.tier3_price || '', tier3_quantity: event.tier3_quantity || '',
   });
   const [saving, setSaving] = useState(false);
-  const [err, setErr]       = useState('');
+  const [err,    setErr]    = useState('');
 
   const handleSave = async () => {
     setSaving(true); setErr('');
@@ -140,21 +137,18 @@ function EditPricesModal({ event, onClose, onSaved }) {
         tier3_quantity: Number(form.tier3_quantity) || 0,
       });
       onSaved(); onClose();
-    } catch(e) { setErr(e.response?.data?.message || 'Failed to save'); }
+    } catch (e) { setErr(e.response?.data?.message || 'Failed to save'); }
     finally { setSaving(false); }
   };
 
   return (
     <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(6px)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px' }} onClick={onClose}>
-      <div style={{ background:'var(--bg-card)',border:'1px solid rgba(0,212,255,0.2)',borderRadius:'var(--radius-lg)',maxWidth:'500px',width:'100%',padding:'28px' }} onClick={e=>e.stopPropagation()}>
+      <div style={{ background:'var(--bg-card)',border:'1px solid rgba(0,212,255,0.2)',borderRadius:'var(--radius-lg)',maxWidth:'500px',width:'100%',padding:'28px' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--cyan)',letterSpacing:'0.15em',marginBottom:'6px' }}>EDIT TICKET PRICES</div>
         <div style={{ fontFamily:'var(--text-display)',fontSize:'14px',color:'var(--text-primary)',marginBottom:'20px' }}>{event.title}</div>
         {err && <div className="alert alert-error" style={{ marginBottom:'14px' }}>{err}</div>}
-        {[
-          { n:1, color:'var(--gold)' },
-          { n:2, color:'var(--cyan)' },
-          { n:3, color:'#b040ff'    },
-        ].map(({ n, color }) => (
+
+        {[{ n:1, color:'var(--gold)' }, { n:2, color:'var(--cyan)' }, { n:3, color:'#b040ff' }].map(({ n, color }) => (
           <div key={n} style={{ background:'var(--bg-secondary)',border:'var(--border-dim)',borderRadius:'var(--radius-sm)',padding:'14px',marginBottom:'12px' }}>
             <div style={{ fontFamily:'var(--text-display)',fontSize:'12px',color,marginBottom:'10px' }}>{getTierLabel(n).toUpperCase()}</div>
             <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px' }}>
@@ -173,8 +167,9 @@ function EditPricesModal({ event, onClose, onSaved }) {
             </div>
           </div>
         ))}
+
         <div style={{ display:'flex',gap:'10px',marginTop:'8px' }}>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : '💾 Save Changes'}</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : '💾 Save Changes'}</button>
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
         </div>
       </div>
@@ -184,13 +179,15 @@ function EditPricesModal({ event, onClose, onSaved }) {
 
 // ─── Book Artist Modal ────────────────────────────────────────────────────────
 function BookArtistModal({ singers, onClose, onSuccess }) {
-  const [form, setForm]             = useState({ singer_id:'', event_date:'', venue:'', proposed_fee:'', message:'' });
+  const [form, setForm]           = useState({ singer_id:'', event_date:'', venue:'', proposed_fee:'', message:'' });
   const [submitting, setSubmitting] = useState(false);
-  const [err, setErr]               = useState('');
+  const [err, setErr]             = useState('');
   const selected = singers.find(s => String(s.u_id) === String(form.singer_id));
 
   const handleSubmit = async () => {
-    if (!form.singer_id || !form.event_date || !form.venue) { setErr('Artist, date and venue are required'); return; }
+    if (!form.singer_id || !form.event_date || !form.venue) {
+      setErr('Artist, date and venue are required'); return;
+    }
     setSubmitting(true); setErr('');
     try {
       await api.post('/events/booking', {
@@ -201,13 +198,13 @@ function BookArtistModal({ singers, onClose, onSuccess }) {
         message:      form.message,
       });
       onSuccess(); onClose();
-    } catch(e) { setErr(e.response?.data?.message || 'Failed to send request'); }
+    } catch (e) { setErr(e.response?.data?.message || 'Failed to send request'); }
     finally { setSubmitting(false); }
   };
 
   return (
     <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(6px)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px' }} onClick={onClose}>
-      <div style={{ background:'var(--bg-card)',border:'1px solid rgba(0,212,255,0.2)',borderRadius:'var(--radius-lg)',maxWidth:'520px',width:'100%',padding:'28px',maxHeight:'90vh',overflowY:'auto' }} onClick={e=>e.stopPropagation()}>
+      <div style={{ background:'var(--bg-card)',border:'1px solid rgba(0,212,255,0.2)',borderRadius:'var(--radius-lg)',maxWidth:'520px',width:'100%',padding:'28px',maxHeight:'90vh',overflowY:'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--cyan)',letterSpacing:'0.15em',marginBottom:'20px' }}>🎤 SEND BOOKING REQUEST</div>
         {err && <div className="alert alert-error" style={{ marginBottom:'14px' }}>{err}</div>}
 
@@ -215,6 +212,9 @@ function BookArtistModal({ singers, onClose, onSuccess }) {
           <label className="form-label">Select Artist *</label>
           <select className="form-control" value={form.singer_id} onChange={e => setForm(p => ({ ...p, singer_id: e.target.value }))}>
             <option value="">— Choose an artist —</option>
+            {singers.length === 0 && (
+              <option disabled>No approved artists found</option>
+            )}
             {singers.map(s => (
               <option key={s.u_id} value={s.u_id}>
                 {s.unique_username}{s.genre ? ` · ${s.genre}` : ''}{s.fixed_fee ? ` · ৳${Number(s.fixed_fee).toLocaleString()}/show` : ''}
@@ -231,7 +231,7 @@ function BookArtistModal({ singers, onClose, onSuccess }) {
             <div>
               <div style={{ fontFamily:'var(--text-display)',fontSize:'14px',color:'var(--gold)' }}>{selected.unique_username}</div>
               <div style={{ fontFamily:'var(--text-mono)',fontSize:'11px',color:'var(--text-dim)',marginTop:'2px' }}>
-                {selected.genre || 'Artist'} {selected.fixed_fee > 0 ? `· ৳${Number(selected.fixed_fee).toLocaleString()}/show` : '· Fee negotiable'}
+                {selected.genre || 'Artist'}{selected.fixed_fee > 0 ? ` · ৳${Number(selected.fixed_fee).toLocaleString()}/show` : ' · Fee negotiable'}
               </div>
             </div>
           </div>
@@ -254,7 +254,7 @@ function BookArtistModal({ singers, onClose, onSuccess }) {
           </div>
           <div className="form-group" style={{ margin:0 }}>
             <label className="form-label">Message to Artist</label>
-            <textarea className="form-control" rows={3} placeholder="Describe your event, audience size, requirements..."
+            <textarea className="form-control" rows={3} placeholder="Describe your event, audience size, requirements…"
               value={form.message} onChange={e => setForm(p => ({ ...p, message: e.target.value }))} style={{ resize:'vertical' }} />
           </div>
         </div>
@@ -265,7 +265,7 @@ function BookArtistModal({ singers, onClose, onSuccess }) {
 
         <div style={{ display:'flex',gap:'10px',marginTop:'16px' }}>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? 'Sending...' : '📨 Send Booking Request'}
+            {submitting ? 'Sending…' : '📨 Send Booking Request'}
           </button>
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
         </div>
@@ -289,8 +289,7 @@ function CreateEventFromBookingModal({ booking, singers, onClose, onCreated }) {
   });
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr]               = useState('');
-
-  const setField = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const handleCreate = async () => {
     if (!form.title || !form.venue || !form.date) { setErr('Title, venue and date are required'); return; }
@@ -315,7 +314,7 @@ function CreateEventFromBookingModal({ booking, singers, onClose, onCreated }) {
       });
       onCreated(res.data);
       onClose();
-    } catch(e) { setErr(e.response?.data?.message || 'Failed to create event'); }
+    } catch (e) { setErr(e.response?.data?.message || 'Failed to create event'); }
     finally { setSubmitting(false); }
   };
 
@@ -327,11 +326,10 @@ function CreateEventFromBookingModal({ booking, singers, onClose, onCreated }) {
 
   return (
     <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.88)',backdropFilter:'blur(6px)',zIndex:400,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px' }} onClick={onClose}>
-      <div style={{ background:'var(--bg-card)',border:'1px solid rgba(0,212,255,0.25)',borderRadius:'var(--radius-lg)',maxWidth:'680px',width:'100%',maxHeight:'92vh',overflowY:'auto',padding:'32px' }} onClick={e=>e.stopPropagation()}>
+      <div style={{ background:'var(--bg-card)',border:'1px solid rgba(0,212,255,0.25)',borderRadius:'var(--radius-lg)',maxWidth:'680px',width:'100%',maxHeight:'92vh',overflowY:'auto',padding:'32px' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--cyan)',letterSpacing:'0.2em',marginBottom:'6px' }}>CREATE EVENT FROM ACCEPTED BOOKING</div>
         <h2 style={{ fontFamily:'var(--text-display)',fontSize:'20px',color:'var(--text-primary)',marginBottom:'8px' }}>Finalize Event Details</h2>
 
-        {/* Singer info banner */}
         <div style={{ background:'rgba(0,191,166,0.06)',border:'1px solid rgba(0,191,166,0.2)',borderRadius:'10px',padding:'12px 16px',marginBottom:'20px',display:'flex',gap:'12px',alignItems:'center' }}>
           <div style={{ width:'40px',height:'40px',borderRadius:'50%',background:'rgba(0,191,166,0.15)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--cyan)',fontSize:'18px',flexShrink:0 }}>
             {(singerInfo?.unique_username || booking.singer_name || '?').charAt(0).toUpperCase()}
@@ -348,33 +346,32 @@ function CreateEventFromBookingModal({ booking, singers, onClose, onCreated }) {
 
         {err && <div className="alert alert-error" style={{ marginBottom:'16px' }}>{err}</div>}
 
-        {/* Basic info */}
         <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',letterSpacing:'0.15em',marginBottom:'12px' }}>EVENT DETAILS</div>
         <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'14px',marginBottom:'20px' }}>
           <div className="form-group" style={{ margin:0,gridColumn:'1/-1' }}>
             <label className="form-label">Event Title *</label>
             <input className="form-control" placeholder="e.g. IIT-DU Tech Fest 2026 — Mega Night"
-              value={form.title} onChange={e => setField('title', e.target.value)} />
+              value={form.title} onChange={e => set('title', e.target.value)} />
           </div>
           <div className="form-group" style={{ margin:0 }}>
             <label className="form-label">Venue *</label>
-            <input className="form-control" value={form.venue} onChange={e => setField('venue', e.target.value)} />
+            <input className="form-control" value={form.venue} onChange={e => set('venue', e.target.value)} />
           </div>
           <div className="form-group" style={{ margin:0 }}>
             <label className="form-label">City</label>
-            <input className="form-control" value={form.city} onChange={e => setField('city', e.target.value)} />
+            <input className="form-control" value={form.city} onChange={e => set('city', e.target.value)} />
           </div>
           <div className="form-group" style={{ margin:0 }}>
             <label className="form-label">Date *</label>
-            <input className="form-control" type="date" value={form.date} onChange={e => setField('date', e.target.value)} />
+            <input className="form-control" type="date" value={form.date} onChange={e => set('date', e.target.value)} />
           </div>
           <div className="form-group" style={{ margin:0 }}>
             <label className="form-label">Time</label>
-            <input className="form-control" type="time" value={form.time} onChange={e => setField('time', e.target.value)} />
+            <input className="form-control" type="time" value={form.time} onChange={e => set('time', e.target.value)} />
           </div>
           <div className="form-group" style={{ margin:0,gridColumn:'1/-1' }}>
             <label className="form-label">Poster Image URL <span style={{ color:'var(--text-dim)',fontWeight:400 }}>(singer can also add later)</span></label>
-            <input className="form-control" placeholder="https://..." value={form.poster} onChange={e => setField('poster', e.target.value)} />
+            <input className="form-control" placeholder="https://…" value={form.poster} onChange={e => set('poster', e.target.value)} />
             {form.poster && (
               <img src={form.poster} alt="preview"
                 style={{ marginTop:'8px',width:'100%',maxHeight:'120px',objectFit:'cover',borderRadius:'8px',border:'1px solid rgba(255,255,255,0.1)' }}
@@ -383,12 +380,11 @@ function CreateEventFromBookingModal({ booking, singers, onClose, onCreated }) {
           </div>
           <div className="form-group" style={{ margin:0,gridColumn:'1/-1' }}>
             <label className="form-label">Description</label>
-            <textarea className="form-control" rows={3} placeholder="Describe the event..."
-              value={form.description} onChange={e => setField('description', e.target.value)} style={{ resize:'vertical' }} />
+            <textarea className="form-control" rows={3} placeholder="Describe the event…"
+              value={form.description} onChange={e => set('description', e.target.value)} style={{ resize:'vertical' }} />
           </div>
         </div>
 
-        {/* Ticket sections */}
         <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',letterSpacing:'0.15em',marginBottom:'12px' }}>
           TICKET SECTIONS <span style={{ textTransform:'none',letterSpacing:0,fontWeight:400 }}>(0 = disabled)</span>
         </div>
@@ -399,12 +395,12 @@ function CreateEventFromBookingModal({ booking, singers, onClose, onCreated }) {
               <div className="form-group" style={{ margin:0 }}>
                 <label className="form-label">Price (৳) <span style={{ color:'var(--text-dim)',textTransform:'none',letterSpacing:0 }}>0 = free</span></label>
                 <input className="form-control" type="number" min="0" placeholder="e.g. 300"
-                  value={form[`tier${n}_price`]} onChange={e => setField(`tier${n}_price`, e.target.value)} />
+                  value={form[`tier${n}_price`]} onChange={e => set(`tier${n}_price`, e.target.value)} />
               </div>
               <div className="form-group" style={{ margin:0 }}>
                 <label className="form-label">Capacity <span style={{ color:'var(--text-dim)',textTransform:'none',letterSpacing:0 }}>0 = disabled</span></label>
                 <input className="form-control" type="number" min="0" placeholder="e.g. 200"
-                  value={form[`tier${n}_quantity`]} onChange={e => setField(`tier${n}_quantity`, e.target.value)} />
+                  value={form[`tier${n}_quantity`]} onChange={e => set(`tier${n}_quantity`, e.target.value)} />
               </div>
             </div>
           </div>
@@ -412,12 +408,12 @@ function CreateEventFromBookingModal({ booking, singers, onClose, onCreated }) {
 
         <div style={{ background:'rgba(0,191,166,0.06)',border:'1px solid rgba(0,191,166,0.2)',borderRadius:'8px',padding:'12px 14px',marginTop:'16px',marginBottom:'20px',fontFamily:'var(--text-mono)',fontSize:'11px',color:'var(--text-dim)',lineHeight:1.6 }}>
           ✅ Singer agreed — event will be <span style={{ color:'var(--cyan)' }}>immediately ready to launch</span>. No admin approval needed.
-          After creating, click <span style={{ color:'var(--gold)' }}>🚀 Launch</span> to make it live for everyone.
+          After creating, click <span style={{ color:'var(--gold)' }}>🚀 Launch</span> to make it live.
         </div>
 
         <div style={{ display:'flex',gap:'10px' }}>
           <button className="btn btn-primary" onClick={handleCreate} disabled={submitting} style={{ flex:1 }}>
-            {submitting ? 'Creating...' : '⚡ CREATE EVENT'}
+            {submitting ? 'Creating…' : '⚡ CREATE EVENT'}
           </button>
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
         </div>
@@ -442,15 +438,11 @@ function TicketSoldCell({ ev }) {
         const pct = Math.min(Math.round((t.sold / t.cap) * 100), 100);
         return (
           <div key={t.n} style={{ display:'flex',alignItems:'center',gap:'6px' }}>
-            <span style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:t.color,width:'56px',flexShrink:0 }}>
-              {getTierLabel(t.n)}
-            </span>
+            <span style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:t.color,width:'56px',flexShrink:0 }}>{getTierLabel(t.n)}</span>
             <div style={{ flex:1,height:'5px',background:'rgba(255,255,255,0.07)',borderRadius:'3px',overflow:'hidden',minWidth:'50px' }}>
               <div style={{ height:'100%',width:`${pct}%`,background:t.color,borderRadius:'3px',transition:'width 0.6s' }} />
             </div>
-            <span style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',whiteSpace:'nowrap' }}>
-              {t.sold}/{t.cap}
-            </span>
+            <span style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',whiteSpace:'nowrap' }}>{t.sold}/{t.cap}</span>
           </div>
         );
       })}
@@ -465,11 +457,11 @@ export default function OrganizerDashboard() {
   const [events,     setEvents]     = useState([]);
   const [bookings,   setBookings]   = useState([]);
   const [singers,    setSingers]    = useState([]);
+  const [complaints, setComplaints] = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [activeTab,  setActiveTab]  = useState('EVENTS');
   const [alert,      setAlert]      = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [complaints, setComplaints] = useState([]);
 
   const [salesModal,        setSalesModal]        = useState(null);
   const [editPricesModal,   setEditPricesModal]   = useState(null);
@@ -481,45 +473,21 @@ export default function OrganizerDashboard() {
 
   const refresh = () => setRefreshKey(k => k + 1);
 
+  // ── Data fetch — all 4 responses destructured correctly ────────────────────
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      api.get('/events/organizer/mine').catch(e => { console.error('mine:', e.response?.data); return { data: [] }; }),
-      api.get('/complaints/organizer/all'),
+      api.get('/events/organizer/mine').catch(e    => { console.error('mine:', e.response?.data);      return { data: [] }; }),
+      api.get('/complaints/organizer/all').catch(e => { console.error('complaints:', e.response?.data); return { data: [] }; }),
       api.get('/events/organizer/bookings').catch(e => { console.error('bookings:', e.response?.data); return { data: [] }; }),
-      api.get('/users/singers').catch(() => ({ data: [] })),
-    ]).then(([ev, bk, sg]) => {
-      setEvents(Array.isArray(ev.data) ? ev.data : (ev.data?.events || []));
+      api.get('/users/singers').catch(e            => { console.error('singers:', e.response?.data);   return { data: [] }; }),
+    ]).then(([ev, cm, bk, sg]) => {
+      setEvents(Array.isArray(ev.data)   ? ev.data   : (ev.data?.events || []));
+      setComplaints(Array.isArray(cm.data) ? cm.data : []);
       setBookings(Array.isArray(bk.data) ? bk.data : []);
-      setSingers(Array.isArray(sg.data) ? sg.data : []);
+      setSingers(Array.isArray(sg.data)  ? sg.data  : []);
     }).finally(() => setLoading(false));
   }, [refreshKey]);
-
-//   useEffect(() => {
-//   setLoading(true);
-
-//   Promise.all([
-//     api.get('/events/organizer/mine')
-//       .catch(e => { console.error('mine:', e.response?.data); return { data: [] }; }),
-
-//     api.get('/complaints/organizer/all')
-//       .catch(e => { console.error('complaints:', e.response?.data); return { data: [] }; }),
-
-//     api.get('/events/organizer/bookings')
-//       .catch(e => { console.error('bookings:', e.response?.data); return { data: [] }; }),
-
-//     api.get('/users/singers')
-//       .catch(() => ({ data: [] })),
-//   ])
-//   .then(([ev, cm, bk, sg]) => {
-//     setEvents(Array.isArray(ev.data) ? ev.data : (ev.data?.events || []));
-//     setComplaints(Array.isArray(cm.data) ? cm.data : []);
-//     setBookings(Array.isArray(bk.data) ? bk.data : []);
-//     setSingers(Array.isArray(sg.data) ? sg.data : []);
-//   })
-//   .finally(() => setLoading(false));
-
-// }, [refreshKey]);
 
   const showAlert = (type, text) => {
     setAlert({ type, text });
@@ -530,15 +498,15 @@ export default function OrganizerDashboard() {
     try {
       await api.post(`/events/${eventId}/launch`);
       showAlert('success', `🚀 "${eventTitle}" is now LIVE!`);
-      setEvents(prev => prev.map(e => (e.event_id||e.id)===eventId ? { ...e, status:'live', launch:1 } : e));
-    } catch(err) { showAlert('error', err.response?.data?.message || 'Failed to launch event'); }
+      setEvents(prev => prev.map(e => (e.event_id||e.id) === eventId ? { ...e, status:'live', launch:1 } : e));
+    } catch (err) { showAlert('error', err.response?.data?.message || 'Failed to launch event'); }
   };
 
   const toggleDynamicPricing = async (eventId, current) => {
     try {
       const res = await api.put(`/events/${eventId}/dynamic-pricing`, { enabled: !current });
       showAlert('success', `🧠 Dynamic pricing ${res.data.enabled ? 'enabled' : 'disabled'}`);
-      setEvents(prev => prev.map(e => (e.event_id||e.id)===eventId ? { ...e, dynamic_pricing_enable: res.data.enabled?1:0 } : e));
+      setEvents(prev => prev.map(e => (e.event_id||e.id) === eventId ? { ...e, dynamic_pricing_enable: res.data.enabled ? 1 : 0 } : e));
     } catch { showAlert('error', 'Failed to toggle dynamic pricing'); }
   };
 
@@ -547,7 +515,7 @@ export default function OrganizerDashboard() {
     try {
       const res = await api.post('/tickets/scan', { qr_code: qrCode });
       setQrResult({ success: true, data: res.data });
-    } catch(err) {
+    } catch (err) {
       setQrResult({ success: false, message: err.response?.data?.message || 'Invalid or already used ticket' });
     }
     setQrCode('');
@@ -555,8 +523,8 @@ export default function OrganizerDashboard() {
 
   const pendingBookings  = bookings.filter(b => b.status === 'pending');
   const acceptedBookings = bookings.filter(b => b.status === 'accepted');
-  const pendingEvents    = events.filter(e => e.status === 'pending');
-  const launchableEvents = events.filter(e => e.status === 'approved' && !e.launch);
+  const pendingEvents    = events.filter(e  => e.status === 'pending');
+  const launchableEvents = events.filter(e  => e.status === 'approved' && !e.launch);
 
   const TABS = [
     { key:'EVENTS',     badge: launchableEvents.length > 0 ? `${launchableEvents.length} ready` : pendingEvents.length > 0 ? `${pendingEvents.length} pending` : null, badgeColor:'var(--cyan)' },
@@ -633,7 +601,7 @@ export default function OrganizerDashboard() {
         <div className="panel">
           <div className="panel-tabs">
             {TABS.map(tab => (
-              <button key={tab.key} className={`panel-tab ${activeTab===tab.key ? 'active' : ''}`} onClick={() => setActiveTab(tab.key)}>
+              <button key={tab.key} className={`panel-tab ${activeTab === tab.key ? 'active' : ''}`} onClick={() => setActiveTab(tab.key)}>
                 {tab.key}
                 {tab.badge != null && (
                   <span style={{ marginLeft:'6px',background:tab.badgeColor,color:'#000',borderRadius:'20px',padding:'1px 6px',fontSize:'9px',fontWeight:'700' }}>
@@ -678,18 +646,13 @@ export default function OrganizerDashboard() {
                             <td>
                               <div style={{ fontWeight:600,fontFamily:'var(--text-body)' }}>{ev.title}</div>
                               {ev.singer_name && (
-                                <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',marginTop:'2px' }}>
-                                  🎤 {ev.singer_name}
-                                </div>
+                                <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',marginTop:'2px' }}>🎤 {ev.singer_name}</div>
                               )}
                             </td>
                             <td style={{ fontFamily:'var(--text-mono)',fontSize:'12px',color:'var(--text-secondary)' }}>
                               {formatDate(ev.date || ev.event_date)}
                             </td>
-                            <td>
-                              {/* Live sold counts — populated by updated /organizer/mine query */}
-                              <TicketSoldCell ev={ev} />
-                            </td>
+                            <td><TicketSoldCell ev={ev} /></td>
                             <td>
                               <span className="badge" style={{ color:STATUS_COLOR[ev.status]||'#888',background:`${STATUS_COLOR[ev.status]}18`,border:`1px solid ${STATUS_COLOR[ev.status]}44` }}>
                                 {(ev.status || '').toUpperCase()}
@@ -744,10 +707,11 @@ export default function OrganizerDashboard() {
                   <div style={{ display:'flex',flexDirection:'column',gap:'12px' }}>
                     {bookings.map(b => (
                       <div key={b.booking_id} style={{
-                        background:'var(--bg-secondary)',
-                        border:`1px solid ${b.status==='accepted'?'rgba(0,200,120,0.3)':b.status==='rejected'?'rgba(255,82,82,0.2)':'rgba(255,255,255,0.08)'}`,
-                        borderLeft:`3px solid ${b.status==='accepted'?'#00c878':b.status==='rejected'?'#FF5252':'rgba(255,179,0,0.5)'}`,
-                        borderRadius:'var(--radius-sm)',padding:'16px',
+                        background:  'var(--bg-secondary)',
+                        border:      `1px solid ${b.status==='accepted'?'rgba(0,200,120,0.3)':b.status==='rejected'?'rgba(255,82,82,0.2)':'rgba(255,255,255,0.08)'}`,
+                        borderLeft:  `3px solid ${b.status==='accepted'?'#00c878':b.status==='rejected'?'#FF5252':'rgba(255,179,0,0.5)'}`,
+                        borderRadius:'var(--radius-sm)',
+                        padding:     '16px',
                       }}>
                         <div className="flex-between" style={{ marginBottom:'10px',flexWrap:'wrap',gap:'8px' }}>
                           <div style={{ display:'flex',gap:'10px',alignItems:'center' }}>
@@ -784,16 +748,13 @@ export default function OrganizerDashboard() {
                             </button>
                           </div>
                         )}
-
                         {b.status === 'rejected' && (
                           <div style={{ marginTop:'8px',fontFamily:'var(--text-mono)',fontSize:'11px',color:'#FF5252' }}>✗ Artist declined this request.</div>
                         )}
                         {b.status === 'pending' && (
-                          <div style={{ marginTop:'8px',fontFamily:'var(--text-mono)',fontSize:'11px',color:'var(--text-dim)' }}>⏳ Waiting for artist response...</div>
+                          <div style={{ marginTop:'8px',fontFamily:'var(--text-mono)',fontSize:'11px',color:'var(--text-dim)' }}>⏳ Waiting for artist response…</div>
                         )}
-                        <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',marginTop:'8px' }}>
-                          Sent {formatDate(b.created_at)}
-                        </div>
+                        <div style={{ fontFamily:'var(--text-mono)',fontSize:'10px',color:'var(--text-dim)',marginTop:'8px' }}>Sent {formatDate(b.created_at)}</div>
                       </div>
                     ))}
                   </div>
@@ -807,7 +768,7 @@ export default function OrganizerDashboard() {
                   Enter QR Code or Ticket ID
                 </div>
                 <div style={{ display:'flex',gap:'10px',maxWidth:'480px',marginBottom:'24px' }}>
-                  <input className="form-control" placeholder="Paste QR code value here..."
+                  <input className="form-control" placeholder="Paste QR code value here…"
                     value={qrCode} onChange={e => setQrCode(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleQrScan()} />
                   <button className="btn btn-primary" onClick={handleQrScan}>SCAN</button>
