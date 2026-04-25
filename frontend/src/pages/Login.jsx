@@ -55,7 +55,7 @@ export default function Login() {
           }}>
             ● SYSTEM ACCESS
           </div>
-          <div className="auth-title">SWAG se karenge sabka Swagat</div>
+          <div className="auth-title">Welcome to our platform</div>
           <div className="auth-subtitle">Enter credentials to access GaanBajna</div>
         </div>
 
