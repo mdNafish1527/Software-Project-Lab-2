@@ -3,10 +3,9 @@ const router  = express.Router();
 const db      = require('../db');
 const { authenticate, requireRole } = require('../middleware/auth');
 
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/users/me
-// FIX: joins SINGER_PROFILE for singer-specific fields
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/me', authenticate, async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -24,14 +23,17 @@ router.get('/me', authenticate, async (req, res) => {
 
     const user = rows[0];
 
-    // Parse available_dates JSON string → array
-    if (user.available_dates && typeof user.available_dates === 'string') {
-      try { user.available_dates = JSON.parse(user.available_dates); }
-      catch { user.available_dates = []; }
+    // Parse available_dates — may arrive as JSON string or already-parsed object
+    if (user.available_dates) {
+      if (typeof user.available_dates === 'string') {
+        try { user.available_dates = JSON.parse(user.available_dates); }
+        catch { user.available_dates = []; }
+      }
+    } else {
+      user.available_dates = [];
     }
-    if (!user.available_dates) user.available_dates = [];
 
-    // availability ENUM → boolean for frontend
+    // Convenience boolean for frontend
     user.available = user.availability !== 'unavailable';
 
     res.json(user);
@@ -41,12 +43,13 @@ router.get('/me', authenticate, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/users/me
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 router.put('/me', authenticate, async (req, res) => {
   try {
     const { username, email, profile_picture, mobile_banking_number } = req.body;
+
     await db.query(
       `UPDATE \`USER\` SET
          unique_username       = COALESCE(?, unique_username),
@@ -56,6 +59,7 @@ router.put('/me', authenticate, async (req, res) => {
        WHERE u_id = ?`,
       [username || null, email || null, profile_picture || null, mobile_banking_number || null, req.user.u_id]
     );
+
     const [updated] = await db.query(
       'SELECT u_id, unique_username, email, role, status, profile_picture FROM `USER` WHERE u_id = ?',
       [req.user.u_id]
@@ -67,16 +71,15 @@ router.put('/me', authenticate, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────
-// GET /api/users/singers
-// FIX: schema uses status='active' not 'approved'
-//      joins SINGER_PROFILE for bio/fee/genre
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/users/singers   (public — used by organizer booking modal)
+// Returns all active singers with their profile details.
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/singers', async (req, res) => {
   try {
     const { search } = req.query;
-    let where  = ["u.role = 'singer' AND u.status = 'active'"];
-    let params = [];
+    const where  = ["u.role = 'singer' AND u.status = 'active'"];
+    const params = [];
 
     if (search) {
       where.push('(u.unique_username LIKE ? OR sp.genre LIKE ? OR sp.bio LIKE ?)');
@@ -87,7 +90,7 @@ router.get('/singers', async (req, res) => {
       `SELECT u.u_id, u.unique_username, u.email, u.profile_picture,
               sp.bio, sp.fixed_fee, sp.genre, sp.availability,
               sp.fixed_fee AS booking_fee,
-              (sp.availability = 'available' OR sp.availability IS NULL) AS available
+              (sp.availability IS NULL OR sp.availability = 'available') AS available
        FROM \`USER\` u
        LEFT JOIN \`SINGER_PROFILE\` sp ON sp.singer_id = u.u_id
        WHERE ${where.join(' AND ')}
@@ -101,9 +104,9 @@ router.get('/singers', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/users/singers/:id
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/singers/:id', async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -119,7 +122,7 @@ router.get('/singers/:id', async (req, res) => {
     const [events] = await db.query(
       `SELECT event_id, title, date, venue, city, poster, status
        FROM \`EVENT\`
-       WHERE singer_id = ? AND status IN ('live','approved','ended')`,
+       WHERE singer_id = ? AND status IN ('live', 'approved', 'ended')`,
       [req.params.id]
     );
     res.json({ ...rows[0], events });
@@ -129,10 +132,9 @@ router.get('/singers/:id', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────
-// PUT /api/users/singer-profile
-// FIX: correctly upserts into SINGER_PROFILE table
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/users/singer-profile   (singer)
+// ─────────────────────────────────────────────────────────────────────────────
 router.put('/singer-profile', authenticate, requireRole('singer'), async (req, res) => {
   try {
     const { bio, fixed_fee, genre, available, profile_picture } = req.body;
@@ -174,10 +176,9 @@ router.put('/singer-profile', authenticate, requireRole('singer'), async (req, r
   }
 });
 
-// ─────────────────────────────────────────────────────────────
-// GET /api/users/singer/availability
-// FIX: was completely missing
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/users/singer/availability   (singer)
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/singer/availability', authenticate, requireRole('singer'), async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -187,8 +188,11 @@ router.get('/singer/availability', authenticate, requireRole('singer'), async (r
     const raw = rows[0]?.available_dates;
     let dates = [];
     if (raw) {
-      try { dates = typeof raw === 'string' ? JSON.parse(raw) : raw; }
-      catch { dates = []; }
+      if (typeof raw === 'string') {
+        try { dates = JSON.parse(raw); } catch { dates = []; }
+      } else if (Array.isArray(raw)) {
+        dates = raw;
+      }
     }
     res.json(Array.isArray(dates) ? dates : []);
   } catch (err) {
@@ -197,10 +201,9 @@ router.get('/singer/availability', authenticate, requireRole('singer'), async (r
   }
 });
 
-// ─────────────────────────────────────────────────────────────
-// PUT /api/users/singer/availability
-// FIX: was completely missing
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/users/singer/availability   (singer)
+// ─────────────────────────────────────────────────────────────────────────────
 router.put('/singer/availability', authenticate, requireRole('singer'), async (req, res) => {
   try {
     const { dates } = req.body;
@@ -218,16 +221,14 @@ router.put('/singer/availability', authenticate, requireRole('singer'), async (r
   }
 });
 
-// ─────────────────────────────────────────────────────────────
-// GET /api/users/singer/shows
-// FIX: was completely missing
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/users/singer/shows   (singer — their events)
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/singer/shows', authenticate, requireRole('singer'), async (req, res) => {
   try {
     const [rows] = await db.query(
       `SELECT e.event_id, e.title, e.poster, e.date, e.time AS event_time,
-              e.venue, e.city, e.status,
-              e.tier1_price AS proposed_fee,
+              e.venue, e.city, e.status, e.tier1_price AS proposed_fee,
               o.unique_username AS organizer_name
        FROM \`EVENT\` e
        LEFT JOIN \`USER\` o ON e.organizer_id = o.u_id
@@ -242,16 +243,16 @@ router.get('/singer/shows', authenticate, requireRole('singer'), async (req, res
   }
 });
 
-// ─────────────────────────────────────────────────────────────
-// ─── ADMIN ROUTES ─────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/pending', authenticate, requireRole('admin'), async (req, res) => {
   try {
     const [rows] = await db.query(
       `SELECT u_id, unique_username, email, role, profile_picture, created_at
        FROM \`USER\`
-       WHERE status = 'pending' AND role IN ('singer','organizer')
+       WHERE status = 'pending' AND role IN ('singer', 'organizer')
        ORDER BY created_at DESC`
     );
     res.json(rows);
@@ -264,15 +265,15 @@ router.get('/pending', authenticate, requireRole('admin'), async (req, res) => {
 router.get('/all', authenticate, requireRole('admin'), async (req, res) => {
   try {
     const { role, status } = req.query;
-    let where  = [];
-    let params = [];
+    const where  = [];
+    const params = [];
     if (role)   { where.push('role = ?');   params.push(role);   }
     if (status) { where.push('status = ?'); params.push(status); }
-    const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const wc = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
     const [rows] = await db.query(
       `SELECT u_id, unique_username, email, role, status, profile_picture, created_at
-       FROM \`USER\` ${whereClause} ORDER BY created_at DESC`,
+       FROM \`USER\` ${wc} ORDER BY created_at DESC`,
       params
     );
     res.json(rows);
@@ -282,11 +283,11 @@ router.get('/all', authenticate, requireRole('admin'), async (req, res) => {
   }
 });
 
-// FIX: status='active' matches actual schema ENUM('active','pending','rejected')
 router.post('/:id/approve', authenticate, requireRole('admin'), async (req, res) => {
   try {
     const [users] = await db.query('SELECT u_id FROM `USER` WHERE u_id = ?', [req.params.id]);
     if (!users.length) return res.status(404).json({ message: 'User not found' });
+
     await db.query("UPDATE `USER` SET status = 'active' WHERE u_id = ?", [req.params.id]);
     res.json({ message: 'Account approved' });
   } catch (err) {
@@ -297,6 +298,9 @@ router.post('/:id/approve', authenticate, requireRole('admin'), async (req, res)
 
 router.post('/:id/reject', authenticate, requireRole('admin'), async (req, res) => {
   try {
+    const [users] = await db.query('SELECT u_id FROM `USER` WHERE u_id = ?', [req.params.id]);
+    if (!users.length) return res.status(404).json({ message: 'User not found' });
+
     await db.query("UPDATE `USER` SET status = 'rejected' WHERE u_id = ?", [req.params.id]);
     res.json({ message: 'Account rejected' });
   } catch (err) {
@@ -310,14 +314,13 @@ router.put('/admin/:id/status', authenticate, requireRole('admin'), async (req, 
     const { status } = req.body;
     const VALID = ['active', 'pending', 'rejected'];
     if (!VALID.includes(status))
-      return res.status(400).json({ message: `status must be: ${VALID.join(', ')}` });
+      return res.status(400).json({ message: `status must be one of: ${VALID.join(', ')}` });
 
     const [result] = await db.query(
       'UPDATE `USER` SET status = ? WHERE u_id = ?',
       [status, req.params.id]
     );
-    if (result.affectedRows === 0)
-      return res.status(404).json({ message: 'User not found' });
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'User not found' });
 
     res.json({ message: `User status updated to ${status}` });
   } catch (err) {
