@@ -469,6 +469,7 @@ export default function OrganizerDashboard() {
   const [activeTab,  setActiveTab]  = useState('EVENTS');
   const [alert,      setAlert]      = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [complaints, setComplaints] = useState([]);
 
   const [salesModal,        setSalesModal]        = useState(null);
   const [editPricesModal,   setEditPricesModal]   = useState(null);
@@ -484,6 +485,7 @@ export default function OrganizerDashboard() {
     setLoading(true);
     Promise.all([
       api.get('/events/organizer/mine').catch(e => { console.error('mine:', e.response?.data); return { data: [] }; }),
+      api.get('/complaints/organizer/all'),
       api.get('/events/organizer/bookings').catch(e => { console.error('bookings:', e.response?.data); return { data: [] }; }),
       api.get('/users/singers').catch(() => ({ data: [] })),
     ]).then(([ev, bk, sg]) => {
@@ -492,6 +494,32 @@ export default function OrganizerDashboard() {
       setSingers(Array.isArray(sg.data) ? sg.data : []);
     }).finally(() => setLoading(false));
   }, [refreshKey]);
+
+//   useEffect(() => {
+//   setLoading(true);
+
+//   Promise.all([
+//     api.get('/events/organizer/mine')
+//       .catch(e => { console.error('mine:', e.response?.data); return { data: [] }; }),
+
+//     api.get('/complaints/organizer/all')
+//       .catch(e => { console.error('complaints:', e.response?.data); return { data: [] }; }),
+
+//     api.get('/events/organizer/bookings')
+//       .catch(e => { console.error('bookings:', e.response?.data); return { data: [] }; }),
+
+//     api.get('/users/singers')
+//       .catch(() => ({ data: [] })),
+//   ])
+//   .then(([ev, cm, bk, sg]) => {
+//     setEvents(Array.isArray(ev.data) ? ev.data : (ev.data?.events || []));
+//     setComplaints(Array.isArray(cm.data) ? cm.data : []);
+//     setBookings(Array.isArray(bk.data) ? bk.data : []);
+//     setSingers(Array.isArray(sg.data) ? sg.data : []);
+//   })
+//   .finally(() => setLoading(false));
+
+// }, [refreshKey]);
 
   const showAlert = (type, text) => {
     setAlert({ type, text });
@@ -637,7 +665,7 @@ export default function OrganizerDashboard() {
                         <th>Date</th>
                         <th>Tickets Sold</th>
                         <th>Status</th>
-                        <th>🧠 AI Price</th>
+                        <th>🧠 Dynamic Pricing</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
