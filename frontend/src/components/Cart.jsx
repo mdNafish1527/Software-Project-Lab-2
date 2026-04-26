@@ -34,7 +34,7 @@ function CartRow({ item, onUpdateQty, onRemove }) {
             <img
               src={item.banner_image || item.image_url}
               alt={item.event_title || item.title}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{ width: '100%', height: '100%', objectFit: 'contain;' }}
               onError={e => { e.target.style.display = 'none'; }}
             />
           ) : (
