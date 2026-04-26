@@ -2,6 +2,19 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
 const { authenticate, requireRole } = require('../middleware/auth');
+function isPastDate(dateValue) {
+  if (!dateValue) return true;
+
+  const selected = new Date(dateValue);
+  if (Number.isNaN(selected.getTime())) return true;
+
+  selected.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return selected < today;
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // DYNAMIC PRICING ENGINE
@@ -291,6 +304,9 @@ router.post('/booking', authenticate, requireRole('organizer'), async (req, res)
     if (!singer_id || !event_date || !venue)
       return res.status(400).json({ message: 'singer_id, event_date and venue are required' });
 
+    if (isPastDate(event_date)) {
+  return res.status(400).json({ message: 'Event date cannot be in the past' });
+}
     // Confirm singer exists and is active
     const [sRows] = await db.query(
       "SELECT u_id FROM `USER` WHERE u_id = ? AND role = 'singer' AND status = 'active'",
@@ -384,9 +400,15 @@ router.post('/', authenticate, requireRole('organizer'), async (req, res) => {
       tier2_price, tier2_quantity,
       tier3_price, tier3_quantity,
     } = req.body;
+    if (date && isPastDate(date)) {
+  return res.status(400).json({ message: 'Event date cannot be in the past' });
+}
 
     if (!title || !venue || !date)
       return res.status(400).json({ message: 'title, venue and date are required' });
+    if (isPastDate(date)) {
+  return res.status(400).json({ message: 'Event date cannot be in the past' });
+}
     if (!tier1_quantity || Number(tier1_quantity) === 0)
       return res.status(400).json({ message: 'Standing section (Tier 1) capacity is required' });
 
