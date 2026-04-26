@@ -58,33 +58,83 @@ export function CartProvider({ children }) {
 
   // ── addTicket ───────────────────────────────────────────────
   // Used by Concerts.jsx: addTicket(event, { label, price }, qty)
-  const addTicket = useCallback((event, tierInfo, qty = 1) => {
-    const tierNum = labelToTierNum(tierInfo.label);
-    const cartId  = `ticket-${event.id}-${tierNum}`;
+  // const addTicket = useCallback((event, tierInfo, qty = 1) => {
+  //   const tierNum = labelToTierNum(tierInfo.label);
+  //   const cartId  = `ticket-${event.id}-${tierNum}`;
 
-    setCartItems(prev => {
-      const existing = prev.find(i => i.cartId === cartId);
-      if (existing) {
-        return prev.map(i =>
-          i.cartId === cartId
-            ? { ...i, quantity: Math.min(i.quantity + qty, 10) }
-            : i
-        );
-      }
-      return [...prev, {
+  //   setCartItems(prev => {
+  //     const existing = prev.find(i => i.cartId === cartId);
+  //     if (existing) {
+  //       return prev.map(i =>
+  //         i.cartId === cartId
+  //           ? { ...i, quantity: Math.min(i.quantity + qty, 10) }
+  //           : i
+  //       );
+  //     }
+  //     return [...prev, {
+  //       cartId,
+  //       type:         'ticket',
+  //       event_id:     event.id,
+  //       event_title:  event.title,
+  //       event_date:   event.event_date,
+  //       banner_image: event.banner_image || '',
+  //       tier:         tierNum,
+  //       tier_label:   getTierLabel(tierNum),
+  //       price:        Number(tierInfo.price) || 0,
+  //       quantity:     qty,
+  //     }];
+  //   });
+  //}, []);
+
+const addTicket = useCallback((event, tierInfo, qty = 1) => {
+  const eventId = Number(event.event_id || event.id);
+
+  const tierNum = Number(
+    tierInfo.tier ||
+    tierInfo.tierNum ||
+    tierInfo.tier_num ||
+    labelToTierNum(tierInfo.label)
+  );
+
+  const safeQty = Math.max(1, Number(qty) || 1);
+  const cartId = `ticket-${eventId}-${tierNum}`;
+
+  setCartItems((prev) => {
+    const existing = prev.find((i) => i.cartId === cartId);
+
+    if (existing) {
+      return prev.map((i) =>
+        i.cartId === cartId
+          ? {
+              ...i,
+              tier: tierNum,
+              tierNum,
+              tier_label: getTierLabel(tierNum),
+              quantity: Math.min(Number(i.quantity || 0) + safeQty, 10),
+            }
+          : i
+      );
+    }
+
+    return [
+      ...prev,
+      {
         cartId,
-        type:         'ticket',
-        event_id:     event.id,
-        event_title:  event.title,
-        event_date:   event.event_date,
-        banner_image: event.banner_image || '',
-        tier:         tierNum,
-        tier_label:   getTierLabel(tierNum),
-        price:        Number(tierInfo.price) || 0,
-        quantity:     qty,
-      }];
-    });
-  }, []);
+        type: 'ticket',
+        event_id: eventId,
+        event_title: event.title || event.event_title,
+        event_date: event.event_date || event.date,
+        banner_image: event.banner_image || event.poster || '',
+        tier: tierNum,
+        tierNum,
+        tier_label: getTierLabel(tierNum),
+        label: getTierLabel(tierNum),
+        price: Number(tierInfo.price) || 0,
+        quantity: safeQty,
+      },
+    ];
+  });
+}, []);
 
   // ── getTicketInCart ─────────────────────────────────────────
  const getTicketInCart = useCallback((eventId, tierLabel) => {
