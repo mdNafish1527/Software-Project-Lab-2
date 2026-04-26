@@ -984,14 +984,13 @@ tbody td {
 
 .product-image {
   width: 100%;
-  height: 140px;
-  object-fit: cover;
+  height: 220px;
+  object-fit: contain;
+  object-position: center;
   background: var(--bg-panel);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 40px;
-  opacity: 0.5;
+  display: block;
+  opacity: 1;
+  padding: 8px;
 }
 
 .product-body { padding: 14px; }
